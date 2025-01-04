@@ -90,3 +90,11 @@ def preprocess(num_synth=40,
 
     df.to_csv(os.path.join(ppth ,'audio_info.csv'))
         
+
+if __name__=="__main__":
+
+    number_of_synth_wav = 80
+    data_root = f"../../data/VOICe_clean/"
+
+    preprocess(num_synth=number_of_synth_wav,
+               data_root=data_root) 

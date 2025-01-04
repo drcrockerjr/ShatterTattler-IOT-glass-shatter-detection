@@ -6,6 +6,8 @@ from torch.utils.data import Dataset
 from torch.utils.data import Subset
 import pandas as pd
 from sklearn.model_selection import train_test_split
+from plot_utils import plot_spectrogram
+import matplotlib.pyplot as plt
 
 DATA_LABELS = ["gunshot", "babycry", "glassbreak"]
 
@@ -56,9 +58,53 @@ class SEDetectionDataset(Dataset):
 
             self.file_names.append(csvData.at[i, "file_name"])
 
-        # print(self.labels)
-        # print(self.file_names)
-        print(f"Max Event wf length: {self.max_event_length}")
+            # wf_path = os.path.join(self.processed_root, "event_audio", csvData.at[i, "file_name"])
+            # wf, sample_rate = torchaudio.load(wf_path, normalize=True)
+
+            # new_sample_rate = 16000
+            # transform = torchaudio.transforms.Resample(sample_rate, new_sample_rate, dtype=torch.float32)
+            # ds_wf = transform(wf)
+
+            # soundData = torch.mean(wf, dim=0, keepdim=True)
+            # ds_soundData = torch.mean(ds_wf, dim=0, keepdim=True)
+
+            # mel_specgram = torchaudio.transforms.MelSpectrogram(
+            # sample_rate=sample_rate,
+            # n_mels=40
+            # # hop_length=512
+            # )(soundData)  # (channel, n_mels, time)
+            
+            # mel_specgram2 = torchaudio.transforms.MelSpectrogram(
+            # sample_rate=new_sample_rate,
+            # n_mels=40
+            # # hop_length=512
+            # )(ds_soundData)  # (channel, n_mels, time)
+            
+            # mfcc3 = torchaudio.transforms.MFCC(
+            # sample_rate=sample_rate
+            # # n_mfcc=40
+            # )(soundData)  # (channel, n_mfcc, time)
+            
+            # mfcc4 = torchaudio.transforms.MFCC(
+            # sample_rate=new_sample_rate
+            # # n_mfcc=60
+            # )(ds_soundData)  # (channel, n_mfcc, time)
+            
+            # fig, axs = plt.subplots(4,1)
+            # print(f"Sample Rate: {sample_rate}")
+            # print(f"Mel1 Shape: {mel_specgram.shape} \n Mel2 Shape: {mel_specgram2.shape}\n Mel3 Shape: {mfcc3.shape}\n Mel4 Shape: {mfcc4.shape}")
+
+            # # print_stats(spec)
+            # plot_spectrogram(mel_specgram[0], title='mel_spec1', ax=axs[0])
+            # plot_spectrogram(mel_specgram2[0], title='mel_spec2', ax=axs[1])
+            # plot_spectrogram(mfcc3[0], title='mel_spec3', ax=axs[2])
+            # plot_spectrogram(mfcc4[0], title='mel_spec4', ax=axs[3])
+
+            # plt.show(block=True)
+
+        # # print(self.labels)
+        # # print(self.file_names)
+        # print(f"Max Event wf length: {self.max_event_length}")
 
         self.max_seq_len = 200
 
@@ -69,24 +115,27 @@ class SEDetectionDataset(Dataset):
         wf, sample_rate = torchaudio.load(wf_path, normalize=True)
         # print_stats(wf)
 
+        new_sample_rate = 16000
+        transform = torchaudio.transforms.Resample(sample_rate, new_sample_rate, dtype=torch.float32)
+        wf = transform(wf)
+
         n_fft = 1024
         win_length = None
         hop_length = 512
 
-        # define transformation
-        spectrogram = T.Spectrogram(
-            n_fft=n_fft,
-            win_length=win_length,
-            hop_length=hop_length,
-            center=True,
-            pad_mode="reflect",
-            power=2.0,
-        )
+        # # define transformation
+        # spectrogram = T.Spectrogram(
+        #     n_fft=n_fft,
+        #     win_length=win_length,
+        #     hop_length=hop_length,
+        #     center=True,
+        #     pad_mode="reflect",
+        #     power=2.0,
+        # )
 
-        spec = spectrogram(wf)
+        # spec = spectrogram(wf)
 
-        # print_stats(spec)
-        # plot_spectrogram(spec[0], title='torchaudio')
+        
 
         soundData = torch.mean(wf, dim=0, keepdim=True)
         # tempData = torch.zeros([1, self.max_event_length])
@@ -99,22 +148,53 @@ class SEDetectionDataset(Dataset):
         # soundData = tempData
 
         mel_specgram = torchaudio.transforms.MelSpectrogram(
-            sample_rate=sample_rate
-            # n_fft=1024,
-            # hop_length=512
+            sample_rate=new_sample_rate
+            # n_mels=40
             )(soundData)  # (channel, n_mels, time)
+        
+        # mel_specgram2 = torchaudio.transforms.MelSpectrogram(
+        #     sample_rate=new_sample_rate,
+        #     n_fft=1024
+        #     # hop_length=512
+        #     )(soundData)  # (channel, n_mels, time)
+        
+        # fig, axs = plt.subplots(2, 1)
+
+        # print_stats(spec)
+        # plot_spectrogram(mel_specgram1, title='mel_spec1', ax=axs[0])
+        # plot_spectrogram(mel_specgram2, title='mel_spec2', ax=axs[1])
+
+        # plt.show(block=True)
+
+
         mel_specgram_norm = (mel_specgram - mel_specgram.mean()) / mel_specgram.std()
 
         mfcc = torchaudio.transforms.MFCC(
-            sample_rate=sample_rate
+            sample_rate=new_sample_rate
             # n_mfcc=40
             )(soundData)  # (channel, n_mfcc, time)
         mfcc_norm = (mfcc - mfcc.mean()) / mfcc.std()
+
+        # fig, axs = plt.subplots(4,1)
+
+        # print(f"Mel1 Shape: {mel_specgram.shape} \n Mel2 Shape: {mel_specgram_norm.shape}\n Mel3 Shape: {mfcc.shape}\n Mel4 Shape: {mfcc_norm.shape}")
+
+
+        # # print_stats(spec)
+        # plot_spectrogram(mel_specgram[0], title='mel_spec1', ax=axs[0])
+        # plot_spectrogram(mel_specgram_norm[0], title='mel_spec2', ax=axs[1])
+        # plot_spectrogram(mfcc[0], title='mel_spec3', ax=axs[2])
+        # plot_spectrogram(mfcc_norm[0], title='mel_spec4', ax=axs[3])
+
+        # plt.show(block=True)
+
         # spectogram = torchaudio.transforms.Spectrogram(sample_rate=sample_rate)(soundData)
         feature = torch.cat([mel_specgram, mfcc], axis=1)
         # print(f"Feature: {feature}, Shape: {feature.shape}")
 
         feature = feature[0].permute(1, 0)
+        # print(f"Feature Shape: {feature.shape}")
+
 
         if feature.size(0) > self.max_seq_len:
             feature = feature[:self.max_seq_len, :]  # Truncate

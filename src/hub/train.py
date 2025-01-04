@@ -1,13 +1,14 @@
 import os
 import torch
 import torch.nn as nn
+from tqdm import tqdm
+from datetime import datetime
 from model import AudioLSTM
 from dataset import SEDetectionDataset, train_val_dataset
 from preprocess import preprocess
+from torch.utils.tensorboard import SummaryWriter
 
-data_root = f"../../data/VOICe_clean"
-# data_root = "/Users/dcrockerjr/Downloads/VOICe_clean"
-assert os.path.exists(data_root), f"VOICe Dataset path doesnt exist"
+
 
 # def collate_fn(batch):
 
@@ -37,59 +38,109 @@ assert os.path.exists(data_root), f"VOICe Dataset path doesnt exist"
 
 #     return features, labels
 
-def train(model, epoch, loader, log_interval):
+def log_scalars(global_tag, writer:SummaryWriter, metric_dict, global_step):
+
+    for tag, value in metric_dict.items():
+        writer.add_scalar(f"{global_tag}/{tag}", value, global_step)
+
+def train(model, epoch, loader, log_interval, writer):
+
+    metric_dict = {}
+
     model.train()
-    for batch_idx, (data, target) in enumerate(loader):
-        data = data.to(device)
-        target = target.to(device)
+    correct = 0
+    y_pred, y_target = [], []
+    with tqdm(loader, unit="batch", leave=True) as tepoch:
+        for batch_idx, (data, target) in enumerate(tepoch):
+            tepoch.set_description(f"Epoch {epoch}")
+            data = data.to(device)
+            target = target.to(device)
 
-        # print(f"Data: {data}, Shape: {data.shape}, target: {target}, shape: {target}")
+            # print(f"Data: {data}, Shape: {data.shape}, target: {target}, shape: {target}")
 
-        # data = torch.tensor(data)
-        # target = torch.tensor(target)
+            # data = torch.tensor(data)
+            # target = torch.tensor(target)
 
+            optimizer.zero_grad()
+            output, hidden_state = model(data, model.init_hidden(hyperparameters["batch_size"]))
+            
+            loss = criterion(output, target)
+            loss.backward()
+            nn.utils.clip_grad_norm_(model.parameters(), clip)
+            optimizer.step()
+
+            pred = torch.max(output, dim=1).indices
+            correct += pred.eq(target).cpu().sum().item()
+            y_pred = y_pred + pred.tolist()
+            y_target = y_target + target.tolist()
+
+            tepoch.set_postfix(loss=loss.item(), accuracy=(100. * correct / (hyperparameters["batch_size"]*(batch_idx+1))), refresh=True)
+
+            # with open("predictions.txt", "a") as f:
+            #     for i in y_target:
+            #         f.write(f"Target: {y_target[i]}, Prediction: {y_pred[i]}")
+
+            # if batch_idx % log_interval == 0: #print training stats
+
+            #     print('Train Epoch: {} [{}/{} ({:.0f}%)]\tLoss: {:.6f}'.format(
+            #         epoch, batch_idx * len(data), len(loader.dataset),
+            #         100. * batch_idx / len(loader), loss))
+
+    metric_dict["Loss"] = loss
+    metric_dict["Accuracy"] =  100. * correct / len(loader.dataset)         
+     
+    log_scalars("Train", writer, metric_dict, epoch)
+            
         
-
-        model.zero_grad()
-        output, hidden_state = model(data, model.init_hidden(hyperparameters["batch_size"]))
-        
-        loss = criterion(output, target)
-        loss.backward()
-        nn.utils.clip_grad_norm_(model.parameters(), clip)
-        optimizer.step()
-
-        if batch_idx % log_interval == 0: #print training stats
-            print('Train Epoch: {} [{}/{} ({:.0f}%)]\tLoss: {:.6f}'.format(
-                epoch, batch_idx * len(data), len(loader.dataset),
-                100. * batch_idx / len(loader), loss))
             
 
-def test(model, epoch, loader, log_interval):
+def test(model, epoch, loader, log_interval, writer: SummaryWriter):
+
+    metric_dict = {}
+
     model.eval()
     correct = 0
     y_pred, y_target = [], []
-    for data, target in loader:
-        data = data.to(device)
-        target = target.to(device)
-        
-        output, hidden_state = model(data, model.init_hidden(hyperparameters["batch_size"]))
-        
-        pred = torch.max(output, dim=1).indices
-        correct += pred.eq(target).cpu().sum().item()
-        y_pred = y_pred + pred.tolist()
-        y_target = y_target + target.tolist()
-    print('\nTest set: Accuracy: {}/{} ({:.0f}%)\n'.format(
-        correct, len(loader.dataset),
-        100. * correct / len(loader.dataset)))
+    with tqdm(loader, unit="batch", leave=True) as tepoch:
+        for batch_idx, (data, target) in enumerate(tepoch):
+            tepoch.set_description(f"Epoch {epoch}")
+            data = data.to(device)
+            target = target.to(device)
+            
+            output, hidden_state = model(data, model.init_hidden(hyperparameters["batch_size"]))
+
+            loss = criterion(output, target)
+            
+            pred = torch.max(output, dim=1).indices
+            correct += pred.eq(target).cpu().sum().item()
+            y_pred = y_pred + pred.tolist()
+            y_target = y_target + target.tolist()
+
+            # if batch_idx % log_interval == 0: #print training stats
+
+            #     print('\nTest set: Accuracy: {}/{} ({:.0f}%)\n'.format(
+            #         correct, len(loader.dataset),
+            #         100. * correct / len(loader.dataset)))
+            tepoch.set_postfix(loss=loss.item(), accuracy=(100. * correct / (hyperparameters["batch_size"]*(batch_idx+1))), refresh=True)
+
+    
+    metric_dict["Loss"] = loss
+    metric_dict["Accuracy"] =  100. * correct / len(loader.dataset)
+
+    log_scalars("Eval", writer, metric_dict, epoch)
     
     
 if __name__=="__main__":
 
-    # preprocess() 
-
     data_root = f"../../data/VOICe_clean/"
+    assert os.path.exists(data_root), f"VOICe Dataset path doesnt exist"
+
+    # preprocess(num_synth=80, data_root=data_root) 
 
     hyperparameters = {"lr": 0.01, "weight_decay": 0.0001, "batch_size": 128, "in_feature": 168, "out_feature": 3}
+
+    log_dir = 'logs/' + datetime.now().strftime('%B%d_%H_%M_%S')
+    writer = SummaryWriter(log_dir)
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     print(device)
@@ -134,5 +185,6 @@ if __name__=="__main__":
     log_interval = 1
     for epoch in range(1, 41):
         # scheduler.step()
-        train(model, epoch, train_loader, log_interval)
-        test(model, epoch, eval_loader, log_interval) 
+        train(model, epoch, train_loader, log_interval, writer)
+        test(model, epoch, eval_loader, log_interval, writer) 
+

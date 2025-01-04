@@ -33,9 +33,9 @@ class AudioLSTM(nn.Module):
     def init_hidden(self, batch_size):
         weight = next(self.parameters()).data
 
-        # hidden = (weight.new(self.n_layers, batch_size, self.n_hidden).zero_().cuda(),
-        #           weight.new(self.n_layers, batch_size, self.n_hidden).zero_().cuda())
+        hidden = (weight.new(self.n_layers, batch_size, self.n_hidden).zero_().cuda(),
+                  weight.new(self.n_layers, batch_size, self.n_hidden).zero_().cuda())
         
-        hidden = (weight.new(self.n_layers, batch_size, self.n_hidden).zero_(),
-                  weight.new(self.n_layers, batch_size, self.n_hidden).zero_())
+        # hidden = (weight.new(self.n_layers, batch_size, self.n_hidden).zero_(),
+        #           weight.new(self.n_layers, batch_size, self.n_hidden).zero_())
         return hidden
