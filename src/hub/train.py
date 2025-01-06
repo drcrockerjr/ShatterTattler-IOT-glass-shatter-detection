@@ -38,153 +38,180 @@ from torch.utils.tensorboard import SummaryWriter
 
 #     return features, labels
 
-def log_scalars(global_tag, writer:SummaryWriter, metric_dict, global_step):
 
-    for tag, value in metric_dict.items():
-        writer.add_scalar(f"{global_tag}/{tag}", value, global_step)
+class ModelTrainer():
+    def __init__(self, 
+                 data_root: str = f"../../data/VOICe_clean/", 
+                 preprocess_data: bool = False):
 
-def train(model, epoch, loader, log_interval, writer):
+        data_root = f"../../data/VOICe_clean/"
+        assert os.path.exists(data_root), f"VOICe Dataset path doesnt exist"
 
-    metric_dict = {}
+        csv_file="audio_info.csv"
 
-    model.train()
-    correct = 0
-    y_pred, y_target = [], []
-    with tqdm(loader, unit="batch", leave=True) as tepoch:
-        for batch_idx, (data, target) in enumerate(tepoch):
-            tepoch.set_description(f"Epoch {epoch}")
-            data = data.to(device)
-            target = target.to(device)
+        if preprocess_data:
+            preprocess(num_synth=80, data_root=data_root) 
 
-            # print(f"Data: {data}, Shape: {data.shape}, target: {target}, shape: {target}")
 
-            # data = torch.tensor(data)
-            # target = torch.tensor(target)
+        dataset = SEDetectionDataset(csv_file, data_root)
 
-            optimizer.zero_grad()
-            output, hidden_state = model(data, model.init_hidden(hyperparameters["batch_size"]))
-            
-            loss = criterion(output, target)
-            loss.backward()
-            nn.utils.clip_grad_norm_(model.parameters(), clip)
-            optimizer.step()
+        self.datasets = train_val_dataset(dataset=dataset)
 
-            pred = torch.max(output, dim=1).indices
-            correct += pred.eq(target).cpu().sum().item()
-            y_pred = y_pred + pred.tolist()
-            y_target = y_target + target.tolist()
+        print("Train set size: " + str(len(self.datasets['train'])))
+        print("Test set size: " + str(len(self.datasets['val'])))
 
-            tepoch.set_postfix(loss=loss.item(), accuracy=(100. * correct / (hyperparameters["batch_size"]*(batch_idx+1))), refresh=True)
+        self.device = 'cpu'
+        num_workers = 0
+        pin_memory = False
+        self.batch_size = 128
 
-            # with open("predictions.txt", "a") as f:
-            #     for i in y_target:
-            #         f.write(f"Target: {y_target[i]}, Prediction: {y_pred[i]}")
+        if torch.cuda.is_available():
+            self.device = 'cuda'
+            num_workers = 2
+            pin_memory = True
 
-            # if batch_idx % log_interval == 0: #print training stats
-
-            #     print('Train Epoch: {} [{}/{} ({:.0f}%)]\tLoss: {:.6f}'.format(
-            #         epoch, batch_idx * len(data), len(loader.dataset),
-            #         100. * batch_idx / len(loader), loss))
-
-    metric_dict["Loss"] = loss
-    metric_dict["Accuracy"] =  100. * correct / len(loader.dataset)         
-     
-    log_scalars("Train", writer, metric_dict, epoch)
-            
+        self.train_loader = torch.utils.data.DataLoader(
+            self.datasets['train'], 
+            num_workers=num_workers if self.device is 'gpu' else 0,
+            batch_size=self.batch_size, 
+            # collate_fn=collate_fn,
+            shuffle=True, 
+            drop_last=True,
+            pin_memory=pin_memory)
         
+        self.eval_loader = torch.utils.data.DataLoader(
+            self.datasets['val'], 
+            batch_size=self.batch_size, 
+            # collate_fn=collate_fn,
+            shuffle=True, 
+            drop_last=True,
+            pin_memory=pin_memory)
+    
+        self.epoch = 0
+
+        self.model = AudioLSTM(n_feature=168, out_feature=3)
+        self.model.to(self.device)
+        print(self.model)
+        self.model_path = "model.pt"
+
+        lr = 0.01
+        weight_decay = 0.0001
+
+        self.optimizer = torch.optim.Adam(self.model.parameters(), lr=lr, weight_decay=weight_decay)
+
+        self.criterion = torch.nn.CrossEntropyLoss()
+
+
+        log_dir = 'logs/' + datetime.now().strftime('%B%d_%H_%M_%S')
+        self.writer = SummaryWriter(log_dir)
+
+    def log_scalars(self, global_tag, metric_dict, global_step):
+
+        for tag, value in metric_dict.items():
+            self.writer.add_scalar(f"{global_tag}/{tag}", value, global_step)
+
+    def train(self, 
+              epoch, 
+              loader,
+              log_interval=1
+            ):
+
+        metric_dict = {}
+
+        self.model.train()
+        correct = 0
+        y_pred, y_target = [], []
+        with tqdm(loader, unit="batch", leave=True) as tepoch:
+            for batch_idx, (data, target) in enumerate(tepoch):
+                tepoch.set_description(f"Epoch {epoch}")
+                data = data.to(self.device)
+                target = target.to(self.device)
+
+                # print(f"Data: {data}, Shape: {data.shape}, target: {target}, shape: {target}")
+
+                # data = torch.tensor(data)
+                # target = torch.tensor(target)
+
+                self.optimizer.zero_grad()
+                output, hidden_state = self.model(data, self.model.init_hidden(self.batch_size))
+                
+                loss = self.criterion(output, target)
+                loss.backward()
+                nn.utils.clip_grad_norm_(self.model.parameters(), 5)
+                self.optimizer.step()
+
+                pred = torch.max(output, dim=1).indices
+                correct += pred.eq(target).cpu().sum().item()
+                y_pred = y_pred + pred.tolist()
+                y_target = y_target + target.tolist()
+
+                tepoch.set_postfix(loss=loss.item(), accuracy=(100. * correct / (self.batch_size*(batch_idx+1))), refresh=True)
+
+                # with open("predictions.txt", "a") as f:
+                #     for i in y_target:
+                #         f.write(f"Target: {y_target[i]}, Prediction: {y_pred[i]}")
+
+                # if batch_idx % log_interval == 0: #print training stats
+
+                #     print('Train Epoch: {} [{}/{} ({:.0f}%)]\tLoss: {:.6f}'.format(
+                #         epoch, batch_idx * len(data), len(loader.dataset),
+                #         100. * batch_idx / len(loader), loss))
+
+        metric_dict["Loss"] = loss
+        metric_dict["Accuracy"] =  100. * correct / len(loader.dataset)         
+        
+        self.log_scalars("Train", metric_dict, epoch)
+                
             
+                
 
-def test(model, epoch, loader, log_interval, writer: SummaryWriter):
+    def test(self,
+             epoch, 
+             loader, 
+             log_interval=1):
 
-    metric_dict = {}
+        metric_dict = {}
 
-    model.eval()
-    correct = 0
-    y_pred, y_target = [], []
-    with tqdm(loader, unit="batch", leave=True) as tepoch:
-        for batch_idx, (data, target) in enumerate(tepoch):
-            tepoch.set_description(f"Epoch {epoch}")
-            data = data.to(device)
-            target = target.to(device)
-            
-            output, hidden_state = model(data, model.init_hidden(hyperparameters["batch_size"]))
+        self.model.eval()
+        correct = 0
+        y_pred, y_target = [], []
+        with tqdm(loader, unit="batch", leave=True) as tepoch:
+            for batch_idx, (data, target) in enumerate(tepoch):
+                tepoch.set_description(f"Epoch {self.epoch}")
+                data = data.to(self.device)
+                target = target.to(self.device)
+                
+                output, hidden_state = self.model(data, self.model.init_hidden(self.batch_size))
 
-            loss = criterion(output, target)
-            
-            pred = torch.max(output, dim=1).indices
-            correct += pred.eq(target).cpu().sum().item()
-            y_pred = y_pred + pred.tolist()
-            y_target = y_target + target.tolist()
+                loss = self.criterion(output, target)
+                
+                pred = torch.max(output, dim=1).indices
+                correct += pred.eq(target).cpu().sum().item()
+                y_pred = y_pred + pred.tolist()
+                y_target = y_target + target.tolist()
 
-            # if batch_idx % log_interval == 0: #print training stats
+                # if batch_idx % log_interval == 0: #print training stats
 
-            #     print('\nTest set: Accuracy: {}/{} ({:.0f}%)\n'.format(
-            #         correct, len(loader.dataset),
-            #         100. * correct / len(loader.dataset)))
-            tepoch.set_postfix(loss=loss.item(), accuracy=(100. * correct / (hyperparameters["batch_size"]*(batch_idx+1))), refresh=True)
+                #     print('\nTest set: Accuracy: {}/{} ({:.0f}%)\n'.format(
+                #         correct, len(loader.dataset),
+                #         100. * correct / len(loader.dataset)))
+                tepoch.set_postfix(loss=loss.item(), accuracy=(100. * correct / (self.batch_size*(batch_idx+1))), refresh=True)
 
-    
-    metric_dict["Loss"] = loss
-    metric_dict["Accuracy"] =  100. * correct / len(loader.dataset)
+        
+        metric_dict["Loss"] = loss
+        metric_dict["Accuracy"] =  100. * correct / len(loader.dataset)
 
-    log_scalars("Eval", writer, metric_dict, epoch)
-    
-    
-if __name__=="__main__":
+        self.log_scalars("Eval", metric_dict, epoch)
+        
+        
+    def train_model(self):
 
-    data_root = f"../../data/VOICe_clean/"
-    assert os.path.exists(data_root), f"VOICe Dataset path doesnt exist"
 
-    # preprocess(num_synth=80, data_root=data_root) 
+        log_interval = 1
+        for epoch in range(1, 41):
+            # scheduler.step()
+            self.train(self.model, epoch, self.train_loader, log_interval)
+            self.test(self.model, epoch, self.eval_loader, log_interval) 
 
-    hyperparameters = {"lr": 0.01, "weight_decay": 0.0001, "batch_size": 128, "in_feature": 168, "out_feature": 3}
-
-    log_dir = 'logs/' + datetime.now().strftime('%B%d_%H_%M_%S')
-    writer = SummaryWriter(log_dir)
-
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    print(device)
-
-    # csv_path = '/kaggle/input/urbansound8k/UrbanSound8K.csv'
-    # file_path = '/kaggle/input/urbansound8k/'
-
-    csv_file="audio_info.csv"
-
-    dataset = SEDetectionDataset(csv_file, data_root)
-
-    datasets = train_val_dataset(dataset=dataset)
-
-    print("Train set size: " + str(len(datasets['train'])))
-    print("Test set size: " + str(len(datasets['val'])))
-
-    kwargs = {'num_workers': 1, 'pin_memory': True} if device == 'cuda' else {}  # needed for using datasets on gpu
-
-    train_loader = torch.utils.data.DataLoader(
-        datasets['train'], 
-        batch_size=hyperparameters["batch_size"], 
-        # collate_fn=collate_fn,
-        shuffle=True, 
-        drop_last=True)
-    
-    eval_loader = torch.utils.data.DataLoader(
-        datasets['val'], 
-        batch_size=hyperparameters["batch_size"], 
-        # collate_fn=collate_fn,
-        shuffle=True, 
-        drop_last=True)
-
-    model = AudioLSTM(n_feature=hyperparameters["in_feature"], out_feature=hyperparameters["out_feature"])
-    model.to(device)
-    print(model)
-
-    optimizer = torch.optim.Adam(model.parameters(), lr=hyperparameters['lr'], weight_decay=hyperparameters['weight_decay'])
-    # scheduler = optim.lr_scheduler.StepLR(optimizer, step_size=20, gamma=0.1)
-    criterion = nn.CrossEntropyLoss()
-    clip = 5  # gradient clipping
-
-    log_interval = 1
-    for epoch in range(1, 41):
-        # scheduler.step()
-        train(model, epoch, train_loader, log_interval, writer)
-        test(model, epoch, eval_loader, log_interval, writer) 
-
+    def save_model(self):
+        torch.save(self.model, self.model_path)

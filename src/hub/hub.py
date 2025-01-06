@@ -1,6 +1,7 @@
 import os
 import threading
 from enum import Enum
+from train import ModelTrainer
 
 class Privilege(Enum):
     admin = 1
@@ -12,8 +13,8 @@ class User:
 
 class Hub():
 
-    def __init__(self):
-        self.clients = []
+    def __init__(self, retrain:bool=True):
+        self.edge_nodes = []
         self.alarm_state = {
             "green": False,
             "yellow": False,
@@ -28,10 +29,21 @@ class Hub():
         self.upper_freq = 13000
         self.lower_freq = 5000
 
+        self.model_trainer = ModelTrainer()
+        self.retrain = retrain
 
+
+    def initialize(self):
+
+
+        if self.retrain: 
+            self.model_trainer.train_model()
 
 
 
     def run_hub(self):
+
+        self.initialize()
+
         while not self.shutdown_event:
             pass
