@@ -1,6 +1,8 @@
 import os
 import torch
 import torch.nn as nn
+import torch.utils
+import torch.utils.data
 from tqdm import tqdm
 from datetime import datetime
 from model import AudioLSTM
@@ -72,7 +74,7 @@ class ModelTrainer():
 
         self.train_loader = torch.utils.data.DataLoader(
             self.datasets['train'], 
-            num_workers=num_workers if self.device is 'gpu' else 0,
+            num_workers=num_workers,
             batch_size=self.batch_size, 
             # collate_fn=collate_fn,
             shuffle=True, 
@@ -92,7 +94,11 @@ class ModelTrainer():
         self.model = AudioLSTM(n_feature=168, out_feature=3)
         self.model.to(self.device)
         print(self.model)
-        self.model_path = "model.pt"
+
+        mdl_dir = "saved_model"
+        os.makedirs(mdl_dir, exist_ok=True)
+
+        self.state_path = os.path.join(mdl_dir, "model.pt")
 
         lr = 0.01
         weight_decay = 0.0001
@@ -111,7 +117,6 @@ class ModelTrainer():
             self.writer.add_scalar(f"{global_tag}/{tag}", value, global_step)
 
     def train(self, 
-              epoch, 
               loader,
               log_interval=1
             ):
@@ -123,7 +128,7 @@ class ModelTrainer():
         y_pred, y_target = [], []
         with tqdm(loader, unit="batch", leave=True) as tepoch:
             for batch_idx, (data, target) in enumerate(tepoch):
-                tepoch.set_description(f"Epoch {epoch}")
+                tepoch.set_description(f"Epoch {self.epoch}")
                 data = data.to(self.device)
                 target = target.to(self.device)
 
@@ -154,19 +159,17 @@ class ModelTrainer():
                 # if batch_idx % log_interval == 0: #print training stats
 
                 #     print('Train Epoch: {} [{}/{} ({:.0f}%)]\tLoss: {:.6f}'.format(
-                #         epoch, batch_idx * len(data), len(loader.dataset),
+                #         self.epoch, batch_idx * len(data), len(loader.dataset),
                 #         100. * batch_idx / len(loader), loss))
 
         metric_dict["Loss"] = loss
         metric_dict["Accuracy"] =  100. * correct / len(loader.dataset)         
         
-        self.log_scalars("Train", metric_dict, epoch)
+        self.log_scalars("Train", metric_dict, self.epoch)
                 
             
                 
-
     def test(self,
-             epoch, 
              loader, 
              log_interval=1):
 
@@ -201,17 +204,34 @@ class ModelTrainer():
         metric_dict["Loss"] = loss
         metric_dict["Accuracy"] =  100. * correct / len(loader.dataset)
 
-        self.log_scalars("Eval", metric_dict, epoch)
+        self.log_scalars("Eval", metric_dict, self.epoch)
         
         
     def train_model(self):
 
 
         log_interval = 1
-        for epoch in range(1, 41):
+        for self.epoch in range(1, 41):
             # scheduler.step()
-            self.train(self.model, epoch, self.train_loader, log_interval)
-            self.test(self.model, epoch, self.eval_loader, log_interval) 
 
-    def save_model(self):
-        torch.save(self.model, self.model_path)
+            self.train(self.train_loader, log_interval)
+            self.test(self.eval_loader, log_interval) 
+
+            self.save_state()
+
+    def save_state(self):
+
+        torch.save({
+            'epoch': self.epoch,
+            'model_state_dict': self.model.state_dict(),
+            'optimizer_state_dict': self.optimizer.state_dict()
+            }
+            , self.state_path)
+
+    def load_state(self, path: str):
+        
+        dict = torch.load(self.state_path)
+
+        self.epoch = dict["epoch"]
+        self.model.load_state_dict(dict["model_state_dict"])
+        self.optimizer.load_state_dict(dict["optimizer_state_dict"])

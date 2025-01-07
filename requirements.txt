@@ -1,3 +1,5 @@
 pydub
 librosa
 matplotlib
+tqdm
+tensorboard
