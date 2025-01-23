@@ -3,6 +3,7 @@ from bleak import BleakScanner, BleakClient
 import asyncio
 import time
 import logging
+import struct
 
 logging.basicConfig(level=logging.INFO,
                     format='%(asctime)s - %(levelname)s - %(message)s')
@@ -13,7 +14,8 @@ logger = logging.getLogger(__name__)
 
 async def run_queue_consumer(queue: asyncio.Queue):
     logger.info("Starting queue consumer")
-
+   
+    init_recv_t = 0
     while True:
         # Use await asyncio.wait_for(queue.get(), timeout=1.0) if you want a timeout for getting data.
         epoch, data = await queue.get()
@@ -23,7 +25,17 @@ async def run_queue_consumer(queue: asyncio.Queue):
             )
             break
         else:
+
+            
+            # Byte Array sent from ESP32
+            data = struct.unpack('<' + 'H' *(len(data) // 2), data)
+
             logger.info("Received callback data via async queue at %s: %r", epoch, data)
+            if 1 in data:
+                init_recv_t = time.time()
+        
+            if 1000 in data:
+                logger.info(f"Recv 1000 Samples after {time.time() - init_recv_t} s")
 
 async def discover_esp32():
 
@@ -44,7 +56,9 @@ async def discover_esp32():
 
 async def run_ble_client(device, queue:asyncio.Queue):
 
+
     async def callback_handler(_, data):
+        
         await queue.put((time.time(), data))
 
     async with BleakClient(device) as client:
@@ -83,6 +97,7 @@ async def run_ble_client(device, queue:asyncio.Queue):
 
 async def main():
 
+    init_recv = 0
     queue = asyncio.Queue()
 
     device = await discover_esp32()
