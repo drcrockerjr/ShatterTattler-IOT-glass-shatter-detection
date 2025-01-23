@@ -45,7 +45,7 @@ async def discover_esp32():
 async def run_ble_client(device, queue:asyncio.Queue):
 
     async def callback_handler(_, data):
-        await queue.put(time.time(), data)
+        await queue.put((time.time(), data))
 
     async with BleakClient(device) as client:
         
