@@ -42,9 +42,10 @@ class Hub():
     def initialize(self):
 
         if self.retrain: 
-            self.logger.info(f"Training model at path: {self.model_trainer.model_path}")
+            self.logger.info(f" Training model at path: {self.model_trainer.state_path}")
             self.model_trainer.train_model()
         else: 
+            self.logger.info(f" Loading state of existing saved model at path: {self.model_trainer.state_path}")
             self.model_trainer.load_state()
 
         

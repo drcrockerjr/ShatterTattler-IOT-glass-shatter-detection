@@ -25,7 +25,7 @@ async def run_queue_consumer(queue: asyncio.Queue):
         else:
             logger.info("Received callback data via async queue at %s: %r", epoch, data)
 
-async def discover():
+async def discover_esp32():
 
     device = None
     discover_dict = await BleakScanner.discover(adapter="hci1", return_adv=True)
@@ -73,8 +73,9 @@ async def run_ble_client(device, queue:asyncio.Queue):
                     read_char = characteristic.uuid
 
         await client.start_notify(read_char, callback_handler)
-        await asyncio.sleep(10.0)
-        await client.stop_notify(read_char)
+        await asyncio.sleep(30.0)
+
+        # await client.stop_notify(read_char)
 
         await queue.put((time.time(), None))
 
@@ -84,7 +85,7 @@ async def main():
 
     queue = asyncio.Queue()
 
-    device = await discover()
+    device = await discover_esp32()
     # addr = discover()
     logger.info(f"Got Address of ESP32: {device.address}")
     
