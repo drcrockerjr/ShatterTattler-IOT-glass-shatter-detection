@@ -86,7 +86,8 @@ async def run_ble_client(device, queue:asyncio.Queue):
                 logger.info(f"  Characteristic: {characteristic.uuid}")
                 logger.info(f"    Properties: {characteristic.properties}")
 
-                if characteristic.uuid == AUIDO_CHAR_UUID: # Is audio Array characteristic
+                if (characteristic.uuid == AUIDO_CHAR_UUID) and ('notify' in characteristic.properties): # Is audio Array characteristic
+                    logger.info(f"Characteristic uuid: {characteristic.uuid}")
                     await client.start_notify(read_char, callback_handler)
 
                     """
