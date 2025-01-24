@@ -11,6 +11,8 @@ logging.basicConfig(level=logging.INFO,
 
 logger = logging.getLogger(__name__)
 
+AUIDO_CHAR_UUID = "00002A57-0000-1000-8000-00805F9B34FB"
+
 
 async def run_queue_consumer(queue: asyncio.Queue):
     logger.info("Starting queue consumer")
@@ -37,29 +39,33 @@ async def run_queue_consumer(queue: asyncio.Queue):
             if 1000 in data:
                 logger.info(f"Recv 1000 Samples after {time.time() - init_recv_t} s")
 
-async def discover_esp32():
+async def discover_edge_devices(esp_name: str= "XIAOESP32S3_BLE_SERVER", max_devices:int=2):
 
-    device = None
+    devices = []
     discover_dict = await BleakScanner.discover(adapter="hci1", return_adv=True)
 
     # dev_dict[0]: BLEDevice, dev_dict[1]: AdvertisementData
     for dev_addr, dev_dict in discover_dict.items():
         logger.info(f"U: {dev_addr}, N: {dev_dict[0].name}, rssi: {dev_dict[0].rssi}")
         
-        if dev_dict[0].name == "XIAOESP32S3_BLE_SERVER":
+        if dev_dict[0].name == esp_name:
             logger.info(f"found ESP32 at addr: {dev_addr}, UUIDs: {dev_dict[1]}")
 
-            device = dev_dict[0] # For Bleak better to connect with BLEDevice class
+            if len(devices) < max_devices:
+                devices.append(dev_dict[0]) # For Bleak better to connect with BLEDevice class
+            else:
+                logger.info(f"Max Device connection exceeded, not adding device: {dev_addr}")
 
-    return device
+    return devices
+
 
 
 async def run_ble_client(device, queue:asyncio.Queue):
 
 
-    async def callback_handler(_, data):
+    async def callback_handler(sender, data):
         
-        await queue.put((time.time(), data))
+        await queue.put((time.time(),sender, data))
 
     async with BleakClient(device) as client:
         
@@ -80,18 +86,24 @@ async def run_ble_client(device, queue:asyncio.Queue):
                 logger.info(f"  Characteristic: {characteristic.uuid}")
                 logger.info(f"    Properties: {characteristic.properties}")
 
+                if characteristic.uuid == AUIDO_CHAR_UUID: # Is audio Array characteristic
+                    await client.start_notify(read_char, callback_handler)
+
+                    """
+                    Need to convert array to s16le .wav file with 16kHz sampling rate
+                    """
+                    
                 if 'notify' in characteristic.properties:
                     value = await client.read_gatt_char(characteristic.uuid)
                     logger.info(f"   Value: {value}")
-
                     read_char = characteristic.uuid
 
-        await client.start_notify(read_char, callback_handler)
+        # await client.start_notify(read_char, callback_handler)
         await asyncio.sleep(30.0)
 
         # await client.stop_notify(read_char)
 
-        await queue.put((time.time(), None))
+        await queue.put((time.time(), None, None))
 
         logger.info(f"Queueu: {queue._queue}")
 
@@ -100,7 +112,7 @@ async def main():
     init_recv = 0
     queue = asyncio.Queue()
 
-    device = await discover_esp32()
+    device = await discover_edge_devices()
     # addr = discover()
     logger.info(f"Got Address of ESP32: {device.address}")
     
