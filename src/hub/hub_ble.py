@@ -14,58 +14,77 @@ logger = logging.getLogger(__name__)
 AUIDO_CHAR_UUID = "00002A57-0000-1000-8000-00805F9B34FB"
 
 
+async def discover_edge_devices(esp_name: str= "XIAOESP32S3_BLE_SERVER", max_devices:int=2):
+
+    devices = []
+    discover_dict = await BleakScanner.discover(adapter="hci1", return_adv=True)
+    while len(devices) == 0:
+        # dev_dict[0]: BLEDevice, dev_dict[1]: AdvertisementData
+        for dev_addr, dev_dict in discover_dict.items():
+            # logger.info(f"U: {dev_addr}, N: {dev_dict[0].name}, rssi: {dev_dict[0].rssi}")
+            
+            if dev_dict[0].name == esp_name:
+                logger.info(f"found ESP32 at addr: {dev_addr}, UUIDs: {dev_dict[1]}")
+
+                if len(devices) < max_devices:
+                    devices.append(dev_dict[0]) # For Bleak better to connect with BLEDevice class
+                    break
+                else:
+                    logger.info(f"Max Device connection exceeded, not adding device: {dev_addr}")
+            else:
+                logger.info(f"Target device not found. Retrying after 1 second...")
+                await asyncio.sleep(1)
+
+    return devices
+"""
 async def run_queue_consumer(queue: asyncio.Queue):
     logger.info("Starting queue consumer")
-   
+ 
     init_recv_t = 0
+
+    client_recv_data = {}
     while True:
         # Use await asyncio.wait_for(queue.get(), timeout=1.0) if you want a timeout for getting data.
-        epoch, data = await queue.get()
+        try:
+            epoch, sender, data = await asyncio.wait_for(queue.get(), timeout=0.5)
+        except asyncio.TimeoutError:
+            continue
+        
         if data is None:
             logger.info(
                 "Got message from client about disconnection. Exiting consumer loop..."
             )
             break
         else:
-
-            
+ 
+ 
             # Byte Array sent from ESP32
             data = struct.unpack('<' + 'H' *(len(data) // 2), data)
-
-            logger.info("Received callback data via async queue at %s: %r", epoch, data)
-            if 1 in data:
-                init_recv_t = time.time()
-        
-            if 1000 in data:
-                logger.info(f"Recv 1000 Samples after {time.time() - init_recv_t} s")
-
-async def discover_edge_devices(esp_name: str= "XIAOESP32S3_BLE_SERVER", max_devices:int=2):
-
-    devices = []
-    discover_dict = await BleakScanner.discover(adapter="hci1", return_adv=True)
-
-    # dev_dict[0]: BLEDevice, dev_dict[1]: AdvertisementData
-    for dev_addr, dev_dict in discover_dict.items():
-        logger.info(f"U: {dev_addr}, N: {dev_dict[0].name}, rssi: {dev_dict[0].rssi}")
-        
-        if dev_dict[0].name == esp_name:
-            logger.info(f"found ESP32 at addr: {dev_addr}, UUIDs: {dev_dict[1]}")
-
-            if len(devices) < max_devices:
-                devices.append(dev_dict[0]) # For Bleak better to connect with BLEDevice class
-            else:
-                logger.info(f"Max Device connection exceeded, not adding device: {dev_addr}")
-
-    return devices
-
-
-
+ 
+            logger.info("Received callback data via async queue at %s: %r, from %s", epoch, data, sender)
+ 
+ 
+            if str(sender) not in client_recv_data:
+                client_recv_data[str(sender)] = []
+            client_recv_data[str(sender)].extend(data)
+ 
+            with open(f"sender_data.txt", "a") as f:
+                f.write(str(client_recv_data[str(sender)]) + "\n\n")
+                f.flush()
+ 
+            # if 1 in data:
+            #     init_recv_t = time.time()
+ 
+            # if 1000 in data:
+            #     logger.info(f"Recv 1000 Samples after {time.time() - init_recv_t} s")
+"""
 async def run_ble_client(device, queue:asyncio.Queue):
-
+    
+    start_notify_time = 0
 
     async def callback_handler(sender, data):
         
-        await queue.put((time.time(),sender, data))
+        await queue.put((time.time() - start_notify_time, sender, data))
 
     async with BleakClient(device) as client:
         
@@ -74,7 +93,8 @@ async def run_ble_client(device, queue:asyncio.Queue):
             return
 
         logger.info(f" Connected to Device: {device.address}")
-
+        
+        # client.set_mtu_size(517)
         logger.info(f" MTU size: {client.mtu_size}")
 
         services = await client.get_services()
@@ -86,10 +106,13 @@ async def run_ble_client(device, queue:asyncio.Queue):
                 logger.info(f"  Characteristic: {characteristic.uuid}")
                 logger.info(f"    Properties: {characteristic.properties}")
 
-                if (characteristic.uuid == AUIDO_CHAR_UUID) and ('notify' in characteristic.properties): # Is audio Array characteristic
+                if (characteristic.uuid == AUIDO_CHAR_UUID) or ('notify' in characteristic.properties): # Is audio Array characteristic
                     logger.info(f"Characteristic uuid: {characteristic.uuid}")
-                    await client.start_notify(read_char, callback_handler)
+                    await client.start_notify(characteristic.uuid, callback_handler)
+                    start_notify_time = time.time()
+                    await asyncio.sleep(30)
 
+                    await client.stop_notify(characteristic.uuid)
                     """
                     Need to convert array to s16le .wav file with 16kHz sampling rate
                     """
@@ -100,7 +123,7 @@ async def run_ble_client(device, queue:asyncio.Queue):
                     read_char = characteristic.uuid
 
         # await client.start_notify(read_char, callback_handler)
-        await asyncio.sleep(30.0)
+        # await asyncio.sleep(30.0)
 
         # await client.stop_notify(read_char)
 
