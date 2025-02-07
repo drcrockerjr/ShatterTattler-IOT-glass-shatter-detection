@@ -10,6 +10,8 @@ from dataset import SEDetectionDataset, train_val_dataset
 from preprocess import preprocess
 from torch.utils.tensorboard import SummaryWriter
 
+from typing import Any, Dict, Optional
+
 
 
 # def collate_fn(batch):
@@ -69,7 +71,7 @@ class ModelTrainer():
 
         if torch.cuda.is_available():
             self.device = 'cuda'
-            num_workers = 2
+            num_workers = 0
             pin_memory = True
 
         self.train_loader = torch.utils.data.DataLoader(
@@ -207,17 +209,18 @@ class ModelTrainer():
         self.log_scalars("Eval", metric_dict, self.epoch)
         
         
-    def train_model(self):
+    def train_model(self, num_epoch:int=41, save_interval:int=5):
 
 
         log_interval = 1
-        for self.epoch in range(1, 41):
+        for self.epoch in range(1, num_epoch):
             # scheduler.step()
 
             self.train(self.train_loader, log_interval)
             self.test(self.eval_loader, log_interval) 
 
-            self.save_state()
+            if self.epoch % save_interval == 0:
+                self.save_state()
 
     def save_state(self):
 
@@ -228,9 +231,13 @@ class ModelTrainer():
             }
             , self.state_path)
 
-    def load_state(self, path: str):
+    def load_state(self, path: Optional[str] = None):
         
-        dict = torch.load(self.state_path)
+        if path is None:
+            dict = torch.load(self.state_path)
+        else:
+            dict = torch.load(path)
+            
 
         self.epoch = dict["epoch"]
         self.model.load_state_dict(dict["model_state_dict"])
