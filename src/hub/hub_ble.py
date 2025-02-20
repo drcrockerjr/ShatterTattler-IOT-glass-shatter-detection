@@ -106,7 +106,7 @@ async def run_ble_client(device, queue:asyncio.Queue):
 
         await queue.put((time.time(), None, None))
 
-        logger.info(f"Queueu: {queue._queue}")
+        logger.info(f"Queue: {queue._queue}")
 
 async def main():
 

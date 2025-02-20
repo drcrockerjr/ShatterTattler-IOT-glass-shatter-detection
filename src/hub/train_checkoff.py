@@ -12,6 +12,7 @@ from dataset import index_to_label
 
 from train import ModelTrainer
 from dataset import SEDetectionDataset
+from notification import notify_user, AlertCode
 
 
 
@@ -81,6 +82,8 @@ def main():
             if flag == True:
                 timestamp_str = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
                 f.write(f"Glass break happended from device: {uuid}, Flag: {flag}, Timestamp: {timestamp_str}\n\n")
+
+                notify_user(AlertCode.GLASS_BREAK, "4pm", "0440")
                 flag = False
 
             if idx == len(eval_loader):

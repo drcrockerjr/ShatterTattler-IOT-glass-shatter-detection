@@ -118,6 +118,13 @@ class Hub():
                 # if 1000 in data:
                 #     logger.info(f"Recv 1000 Samples after {time.time() - init_recv_t} s")
 
+    def is_new_measurement_ready(self):
+        
+        for sender in self.client_recv_data.keys():
+
+            if len(self.client_recv_data[sender]) >= self.sample_rate:
+
+                return True
 
     def run_hub(self):
 
@@ -125,8 +132,12 @@ class Hub():
 
         asyncio.run(self.start_edge_ble())
 
-        # while not self.shutdown_event:
-        #     pass
+
+
+        while not self.shutdown_event:
+                
+
+            pass
 
 
 if __name__=="__main__":
