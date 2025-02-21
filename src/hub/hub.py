@@ -25,7 +25,7 @@ class User:
 
 class Hub():
 
-    def __init__(self, retrain:bool=False):
+    def __init__(self, load_trainer:bool= True, retrain:bool=False):
         self.edge_nodes = []
         self.alarm_state = {
             "green": False,
@@ -41,8 +41,12 @@ class Hub():
         self.upper_freq = 6000
         self.lower_freq = 2000
 
-        # self.model_trainer = ModelTrainer()
         self.retrain = retrain
+        if load_trainer:
+            self.model_trainer = ModelTrainer()
+        else: 
+            self.model_trainer = None
+            self.retrain = False
 
         # Edge Device Config
         self.max_edge_devices = 2
