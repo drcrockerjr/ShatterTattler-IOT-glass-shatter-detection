@@ -56,6 +56,9 @@ def notify_user(alert_code:AlertCode, time_stamp:str, device_id:str):
     if alert_code == AlertCode.GLASS_BREAK:
 
         alert = f"Glass break has been detected from device {device_id} at {time_stamp}"
+    elif alert_code == AlertCode.NO_GLASS_BREAK:
+        alert = f"Sound was recorded, but NO glass break detected from device {device_id} as {time_stamp}"
+
     msg.set_content(alert)
 
     # me == the sender's email address
@@ -70,4 +73,4 @@ def notify_user(alert_code:AlertCode, time_stamp:str, device_id:str):
     # s.send_message(msg)
     # s.quit()
 
-notify_user(AlertCode.GLASS_BREAK, "4pm", "0440")
+# notify_user(AlertCode.GLASS_BREAK, "4pm", "0440")

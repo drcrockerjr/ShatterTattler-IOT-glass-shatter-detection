@@ -110,7 +110,7 @@ async def run_ble_client(device, queue:asyncio.Queue):
                     logger.info(f"Characteristic uuid: {characteristic.uuid}")
                     await client.start_notify(characteristic.uuid, callback_handler)
                     start_notify_time = time.time()
-                    await asyncio.sleep(30)
+                    await asyncio.sleep(60)
 
                     await client.stop_notify(characteristic.uuid)
                     """

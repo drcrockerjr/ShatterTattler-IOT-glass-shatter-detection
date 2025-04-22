@@ -205,3 +205,69 @@ class SEDetectionDataset(Dataset):
     
     def __len__(self):
         return len(self.file_names)
+
+
+
+def wav_to_feature(wf, sample_rate, new_sample_rate=16000):
+    new_sample_rate = 16000
+    transform = torchaudio.transforms.Resample(sample_rate, new_sample_rate, dtype=torch.float32)
+    wf = transform(wf)
+
+    n_fft = 1024
+    win_length = None
+    hop_length = 512
+
+    max_seq_len = 200
+
+
+    soundData = torch.mean(wf, dim=0, keepdim=True)
+    # tempData = torch.zeros([1, self.max_event_length])
+
+    # if soundData.numel() < self.max_event_length:
+        #     tempData[:, :soundData.numel()] = soundData
+    # else:
+    #     tempData = soundData[:, :self.max_event_length]
+
+    # soundData = tempData
+
+    mel_specgram = torchaudio.transforms.MelSpectrogram(
+        sample_rate=new_sample_rate
+        # n_mels=40
+        )(soundData)  # (channel, n_mels, time)
+
+    mel_specgram_norm = (mel_specgram - mel_specgram.mean()) / mel_specgram.std()
+
+    mfcc = torchaudio.transforms.MFCC(
+        sample_rate=new_sample_rate
+        # n_mfcc=40
+        )(soundData)  # (channel, n_mfcc, time)
+    mfcc_norm = (mfcc - mfcc.mean()) / mfcc.std()
+
+    # fig, axs = plt.subplots(4,1)
+
+    # print(f"Mel1 Shape: {mel_specgram.shape} \n Mel2 Shape: {mel_specgram_norm.shape}\n Mel3 Shape: {mfcc.shape}\n Mel4 Shape: {mfcc_norm.shape}")
+
+
+    # # print_stats(spec)
+    # plot_spectrogram(mel_specgram[0], title='mel_spec1', ax=axs[0])
+    # plot_spectrogram(mel_specgram_norm[0], title='mel_spec2', ax=axs[1])
+    # plot_spectrogram(mfcc[0], title='mel_spec3', ax=axs[2])
+    # plot_spectrogram(mfcc_norm[0], title='mel_spec4', ax=axs[3])
+
+    # plt.show(block=True)
+
+    # spectogram = torchaudio.transforms.Spectrogram(sample_rate=sample_rate)(soundData)
+    feature = torch.cat([mel_specgram, mfcc], axis=1)
+    # print(f"Feature: {feature}, Shape: {feature.shape}")
+
+    feature = feature[0].permute(1, 0)
+    # print(f"Feature Shape: {feature.shape}")
+
+
+    if feature.size(0) > max_seq_len:
+        feature = feature[:max_seq_len, :]  # Truncate
+    else:
+        padding = torch.zeros(max_seq_len - feature.size(0), feature.size(1))
+        feature = torch.cat([feature, padding], dim=0)  # Pad\
+
+    return feature
