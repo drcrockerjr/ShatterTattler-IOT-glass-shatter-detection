@@ -97,6 +97,40 @@ async def run_ble_client(device, queue:asyncio.Queue):
         # client.set_mtu_size(517)
         logger.info(f" MTU size: {client.mtu_size}")
 
+        async def heartbeat_loop(
+                interval: float = 30.0,
+                max_retries: int = 3,
+                retry_delay: int = 5):
+            try:
+                while True:
+                    alive = await client.is_connected()
+                    if not alive:
+                        logger.warning(f"Heartbeat: {device.address} disconnected; reconnecting…")
+                        for attempt in range(1, max_retries + 1):
+                            try:
+                                await client.connect()
+                                if await client.is_connected():
+                                    logger.info(f"Reconnected to {device.address}")
+                                    break
+                                else:
+                                    logger.error(f"Reconnect attempt {attempt} failed (still disconnected)")
+
+                            except Exception as e:
+                                logger.error(f"Reconnect attempt {attempt} raised error: {e}")
+                            
+                            if attempt < max_retries:
+                                logger.debug(f"Waiting {retry_delay}s before next reconnect attempt…")
+                                await asyncio.sleep(retry_delay)
+                            else:
+                                logger.error(f"Failed to reconnect after {max_retries} attempts.")
+                    else:
+                        logger.debug(f"Heartbeat OK: {device.address}")
+                    await asyncio.sleep(interval)
+            except asyncio.CancelledError:
+                logger.info("Heartbeat task cancelled")
+                raise
+
+        ble_check = asyncio.create_task(heartbeat_loop(15.0))
         services = await client.get_services()
         
         read_char = None
@@ -130,6 +164,14 @@ async def run_ble_client(device, queue:asyncio.Queue):
         await queue.put((time.time(), None, None))
 
         logger.info(f"Queue: {queue._queue}")
+
+        #clean up heartbeat (not sure if we need this...)
+        ble_check.cancel()
+        try:
+            await ble_check
+        except asyncio.CancelledError:
+            pass
+        logger.info("Heartbeat loop terminated")
 
 async def main():
 
