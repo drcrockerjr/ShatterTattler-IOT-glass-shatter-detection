@@ -58,6 +58,7 @@ class Hub():
 
         # Edge Device Config
         self.edge_sample_rate = 16000
+        self.audio_seconds = 3
         self.max_edge_devices = 2
         self.queue = asyncio.Queue()
         self.ble_tasks = []
@@ -221,7 +222,8 @@ class Hub():
 
     def is_ready_classify(self, data):
         
-        if len(data) > self.edge_sample_rate:
+        # self.audio_seconds = 3
+        if len(data) > self.edge_sample_rate * self.audio_seconds:
             print(f"{len(data)} -> Whole sample recv")
             return True
         return False
