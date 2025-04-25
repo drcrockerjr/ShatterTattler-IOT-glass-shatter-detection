@@ -130,7 +130,6 @@ async def run_ble_client(device, queue:asyncio.Queue):
                 logger.info("Heartbeat task cancelled")
                 raise
 
-        ble_check = asyncio.create_task(heartbeat_loop(15.0))
         services = await client.get_services()
         
         read_char = None
@@ -163,6 +162,7 @@ async def run_ble_client(device, queue:asyncio.Queue):
 
         await queue.put((time.time(), None, None))
 
+        ble_check = asyncio.create_task(heartbeat_loop(15.0))
         logger.info(f"Queue: {queue._queue}")
 
         #clean up heartbeat (not sure if we need this...)
