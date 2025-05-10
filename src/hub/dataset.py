@@ -208,19 +208,30 @@ class SEDetectionDataset(Dataset):
 
 
 
-def wav_to_feature(wf, sample_rate, new_sample_rate=16000):
-    new_sample_rate = 16000
-    transform = torchaudio.transforms.Resample(sample_rate, new_sample_rate, dtype=torch.float32)
-    wf = transform(wf)
+def wav_to_feature(wf, sample_rate, new_sample_rate=16000, to_mono:bool = True):
+    # new_sample_rate = 16000
+    # transform = torchaudio.transforms.Resample(sample_rate, new_sample_rate, dtype=torch.float32)
+    # wf = transform(wf)
 
     n_fft = 1024
     win_length = None
     hop_length = 512
 
     max_seq_len = 200
+    """
+    if to_mono == True:
+        soundData = torch.mean(wf, dim=0, keepdim=True)
+    else:
+        soundData = wf.unsqueeze(0) # unsqueeze to add channel num dimension, defaults to mono
+    """
 
+    if wf.ndim == 1:
+        soundData = wf.unsqueeze(0)
+    else:
+        # e.g. stereo: collapse to mono
+        soundData = wf.mean(dim=0, keepdim=True)
 
-    soundData = torch.mean(wf, dim=0, keepdim=True)
+    print("resized sounddata")
     # tempData = torch.zeros([1, self.max_event_length])
 
     # if soundData.numel() < self.max_event_length:
@@ -236,13 +247,13 @@ def wav_to_feature(wf, sample_rate, new_sample_rate=16000):
         )(soundData)  # (channel, n_mels, time)
 
     mel_specgram_norm = (mel_specgram - mel_specgram.mean()) / mel_specgram.std()
-
+    print("got mel")
     mfcc = torchaudio.transforms.MFCC(
         sample_rate=new_sample_rate
         # n_mfcc=40
         )(soundData)  # (channel, n_mfcc, time)
     mfcc_norm = (mfcc - mfcc.mean()) / mfcc.std()
-
+    print("got mfcc")
     # fig, axs = plt.subplots(4,1)
 
     # print(f"Mel1 Shape: {mel_specgram.shape} \n Mel2 Shape: {mel_specgram_norm.shape}\n Mel3 Shape: {mfcc.shape}\n Mel4 Shape: {mfcc_norm.shape}")
@@ -262,12 +273,16 @@ def wav_to_feature(wf, sample_rate, new_sample_rate=16000):
 
     feature = feature[0].permute(1, 0)
     # print(f"Feature Shape: {feature.shape}")
-
+    print("reshaped tensor")    
 
     if feature.size(0) > max_seq_len:
+        print("greater than max seq len")
         feature = feature[:max_seq_len, :]  # Truncate
+       
     else:
+        print("less than max seq len")
         padding = torch.zeros(max_seq_len - feature.size(0), feature.size(1))
         feature = torch.cat([feature, padding], dim=0)  # Pad\
 
+    print("finished padding")
     return feature

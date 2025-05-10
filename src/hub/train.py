@@ -47,7 +47,7 @@ class ModelTrainer():
     def __init__(self, 
                  data_root: str = f"../../data/VOICe_clean/", 
                  preprocess_data: bool = False):
-
+        """
         data_root = f"../../data/VOICe_clean/"
         assert os.path.exists(data_root), f"VOICe Dataset path doesnt exist"
 
@@ -63,7 +63,7 @@ class ModelTrainer():
 
         print("Train set size: " + str(len(self.datasets['train'])))
         print("Test set size: " + str(len(self.datasets['val'])))
-
+        """
         self.device = 'cpu'
         num_workers = 0
         pin_memory = False
@@ -73,7 +73,7 @@ class ModelTrainer():
             self.device = 'cuda'
             num_workers = 0
             pin_memory = True
-
+        """
         self.train_loader = torch.utils.data.DataLoader(
             self.datasets['train'], 
             num_workers=num_workers,
@@ -112,7 +112,7 @@ class ModelTrainer():
 
         log_dir = 'logs/' + datetime.now().strftime('%B%d_%H_%M_%S')
         self.writer = SummaryWriter(log_dir)
-
+        """
     def log_scalars(self, global_tag, metric_dict, global_step):
 
         for tag, value in metric_dict.items():

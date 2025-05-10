@@ -58,6 +58,7 @@ class Hub():
 
         # Edge Device Config
         self.edge_sample_rate = 16000
+        self.num_audio_sec = 3
         self.max_edge_devices = 2
         self.queue = asyncio.Queue()
         self.ble_tasks = []
@@ -102,7 +103,7 @@ class Hub():
 
                 byte_cnt += len(data)
                 # Byte Array sent from ESP32
-                data = struct.unpack('<' + 'H' *(len(data) // 2), data)
+                data = struct.unpack('<' + 'h' *(len(data) // 2), data) # unpack signed byte array
 
                 logger.info("Received callback data via async queue at %s: %r, from %s", (byte_cnt / (time.time() - init_recv_t)), data, sender)
 
@@ -116,7 +117,7 @@ class Hub():
                 for sender in self.client_recv_data.keys():
 
                     logger.info(f"\n\nBuffer Len: {len(self.client_recv_data[str(sender)])}\n\n")
-                    if self.is_ready_classify(self.client_recv_data[str(sender)]) == True:
+                    if self.is_ready_classify(self.client_recv_data[str(sender)]) == True: #  only classify if self.num_audio_sec packets collected
                         
                         packet = self.client_recv_data[str(sender)]
                         self.n_audio_packets += 1
@@ -125,39 +126,47 @@ class Hub():
                         with open(f"audio_wav{self.n_audio_packets}.txt", "a") as f:
                             f.write(f"{packet}\n\n\n")
 
-                            self.client_recv_data[str(sender)] = []
+                            self.client_recv_data[str(sender)] = [] # only 
 
-                            # plt.plot(packet)
-                            # plt.xlabel("Time")
-                            # plt.ylabel("Amplitude")
-                            # plt.title(f"Audio Packet {self.n_audio_packets} Plot pre upscale")
-                            # plt.show(block=True)
-                            
                             wf = torch.tensor(packet, dtype=torch.float32)
-                        
+                            print(f"\n wf shape: {wf.shape}")
+
+
                             feature = wav_to_feature(wf=wf, sample_rate=self.edge_sample_rate, new_sample_rate=16000)
-
                             feature = feature.to(self.model_trainer.device)
+                            print(f"device set to{self.model_trainer.device}")
+                            print(f"Feature size: {feature.shape}")
 
-                            size_bytes = feature.element_size() * feature.numel()
+                            plt.plot(packet)
+                            plt.xlabel("Time")
+                            plt.ylabel("Amplitude")
+                            plt.title(f"Audio Packet {self.n_audio_packets} Plot pre upscale")
+                            plt.show(block=True)
+                            
+                            
+                            # feature = wav_to_feature(wf=wf, sample_rate=self.edge_sample_rate, new_sample_rate=16000)
 
-                            output, _ = self.model_trainer.model(feature, self.model_trainer.model.init_hidden(1))
+                            # feature = feature.to(self.model_trainer.device)
 
-                            prediction = torch.max(output, dim=1).indices
+                            # size_bytes = feature.element_size() * feature.numel()
+
+                            # output, _ = self.model_trainer.model(feature, self.model_trainer.model.init_hidden(1))
+
+                            # prediction = torch.max(output, dim=1).indices
 
                             # prediction = "gunshot"
 
                             # feature = torch.tensor(packet, dtype=torch.float32)
                             
-                            size_bytes = feature.element_size() * feature.numel()
-                            f.write(f"\n\n Data Shape: {feature.shape}, dtype: {feature.dtype}, Datasize: {size_bytes}\n")
+                            # size_bytes = feature.element_size() * feature.numel()
+                            # f.write(f"\n\n Data Shape: {feature.shape}, dtype: {feature.dtype}, Datasize: {size_bytes}\n")
                             # f.write(f"\n\n Prediction: {index_to_label(prediction.item())}\n")
 
-                            f.write(f"\n\n Prediction: {prediction}\n")
-                            flag = False 
-                            if prediction == "glassbreak":
+                            # f.write(f"\n\n Prediction: {prediction}\n")
+                            # flag = False 
+                            # if prediction == "glassbreak":
                             # if index_to_label(prediction.item()) == "glassbreak":i
-                                flag = True
+                            #     flag = True
                             
                             """ 
                             if self.n_audio_packets == 8:
@@ -193,14 +202,14 @@ class Hub():
                             """
 
 
-                # if self.n_audio_packets == 8:
-                #     logger.info(f"\n\n\nrecv 8 audio packets after {time.time() - init_recv_t}\n\n\n")
+                if self.n_audio_packets == 8:
+                    logger.info(f"\n\n\nrecv 8 audio packets after {time.time() - init_recv_t}\n\n\n")
 
-                #             plt.plot(packet)
-                #             plt.xlabel("Time")
-                #             plt.ylabel("Amplitude")
-                #             plt.title(f"Audio Packet {self.n_audio_packets} Plot pre upscale")
-                #             plt.show(block=True)
+                    plt.plot(packet)
+                    plt.xlabel("Time")
+                    plt.ylabel("Amplitude")
+                    plt.title(f"Audio Packet {self.n_audio_packets} Plot pre upscale")
+                    plt.show(block=True)
 
 
                 if len(self.audio_buffer) >= 1:
@@ -216,12 +225,14 @@ class Hub():
                 # if 1 in data:
                 #     init_recv_t = time.time()
 
+
                 # if 1000 in data:
                 #     logger.info(f"Recv 1000 Samples after {time.time() - init_recv_t} s")
 
     def is_ready_classify(self, data):
         
-        if len(data) > self.edge_sample_rate:
+        # if len(data) > self.edge_sample_rate*self.num_audio_sec:
+        if len(data) > self.edge_sample_rate/(self.num_audio_sec*20):
             print(f"{len(data)} -> Whole sample recv")
             return True
         return False
@@ -263,7 +274,7 @@ class Hub():
         
 
 if __name__=="__main__":
-    hub = Hub(load_trainer=False, retrain=False)
+    hub = Hub(load_trainer=True, retrain=False)
 
     asyncio.run(hub.run_hub())
 
