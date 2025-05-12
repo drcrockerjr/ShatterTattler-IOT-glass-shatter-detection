@@ -1,7 +1,10 @@
 import time, asyncio
 from bleak import BleakClient, BLEDevice
+import logging
 
 from collections import deque
+
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
 class BLEEdgeClient:
     def __init__(self,
@@ -26,6 +29,10 @@ class BLEEdgeClient:
         self.read_uuids = []
         self.write_uuids = []
 
+        self.logger = logging.getLogger(__name__)
+
+
+
     async def _callback(self, sender, data):
         await self.queue.put((time.time() - self.start_conn_time, sender, data))
 
@@ -39,7 +46,7 @@ class BLEEdgeClient:
         self.mtu            = self.client.mtu_size
         self.start_conn_time = time.time()
 
-        # Discover + catalog
+        # Discover and catalog
         services = await self.client.get_services()
         for svc in services:
             for ch in svc.characteristics:
@@ -56,6 +63,7 @@ class BLEEdgeClient:
         for uuid in self.notify_uuids:
             if uuid in self.esp_uuids:
                 await self.client.start_notify(uuid, self._callback)
+                self.logger.info(f"Started notify with UUID: {uuid}")
 
         return True
 
@@ -84,13 +92,13 @@ class BLEEdgeClient:
     ):
         try:
             while True:
-                alive = await self.client.is_connected()
+                alive = await self.client.is_connected
                 if not alive:
                     self.logger.warning(f"Heartbeat: {self.addr} disconnected; reconnecting…")
                     for attempt in range(1, max_retries + 1):
                         try:
                             await self.client.connect()
-                            if await self.client.is_connected():
+                            if await self.client.is_connected:
                                 self.logger.info(f"Reconnected to {self.addr}")
                                 break
                             else:

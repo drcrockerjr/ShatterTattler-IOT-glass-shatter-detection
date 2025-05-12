@@ -98,20 +98,23 @@ class Hub():
                 epoch, sender, data = await asyncio.wait_for(self.ble_queue.get(), timeout=1.0)
             except asyncio.TimeoutError:
                 continue
-            await self.process_packet(epoch, sender, data)
+            # await self.process_packet(epoch, sender, data)
+            asyncio.create_task(self.process_packet(epoch, sender, data))
 
     async def process_packet(self, epoch, sender, data):
         if data is None:
             self.logger.debug("No audio data")
             return
 
-        pcm = struct.unpack('<' + 'h' * (len(data)//2), data)
-        buffer = self.client_recv_data.setdefault(sender, [])
-        buffer.extend(pcm)
+        aud = struct.unpack('<' + 'h' * (len(data)//2), data)
+        if sender not in self.client_recv_data:
+            self.client_recv_data[sender] = []
+        self.client_recv_data[sender].extend(aud) # Extend buf
+        # buffer = self.client_recv_data[sender] # Capture it 
 
-        if len(buffer) >= self.edge_sample_rate * self.num_audio_sec:
+        if len(self.client_recv_data[sender]) >= self.edge_sample_rate * self.num_audio_sec: #  then check 
             # move to a worker
-            buf = buffer.copy()
+            buf = self.client_recv_data[sender].copy()
             self.client_recv_data[sender] = []
             asyncio.create_task(self.classify_packet(sender, buf))
 
@@ -124,13 +127,13 @@ class Hub():
         with suppress(asyncio.CancelledError):
             await consumer
 
-    def is_ready_classify(self, data):
+    # def is_ready_classify(self, data):
         
-        # if len(data) > self.edge_sample_rate*self.num_audio_sec:
-        if len(data) > self.edge_sample_rate*self.num_audio_sec:
-            print(f"{len(data)} -> Whole sample recv")
-            return True
-        return False
+    #     # if len(data) > self.edge_sample_rate*self.num_audio_sec:
+    #     if len(data) > self.edge_sample_rate*self.num_audio_sec:
+    #         print(f"{len(data)} -> Whole sample recv")
+    #         return True
+    #     return False
 
 
     def classify_packet(self, sender, packet):
@@ -139,7 +142,7 @@ class Hub():
         with open(f"audio_wav{self.n_audio_packets}.txt", "a") as f:
             f.write(f"{packet}\n\n\n")
 
-        self.client_recv_data[str(sender)] = [] # only 
+        # self.client_recv_data[str(sender)] = [] # only 
 
         wf = torch.tensor(packet, dtype=torch.float32)
         self.logger.info(f"\n wf shape: {wf.shape}")
@@ -172,11 +175,6 @@ class Hub():
             # notify_user(AlertCode.GLASS_BREAK, "4pm", "0440")
             flag = False
 
-            plt.plot(packet)
-            plt.xlabel("Time")
-            plt.ylabel("Amplitude")
-            plt.title(f"Audio Packet {self.n_audio_packets} Plot pre upscale")
-            plt.show(block=True)
         else:
             timestamp_str = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
             # f.write(f"Sound dected but NO glass break happended from device: {uuid}, Flag: {flag}, Timestamp: {timestamp_str}\n\n")
@@ -184,10 +182,14 @@ class Hub():
             self.logger.info(f"Sound dected but NO glass break happended from device: {uuid}, Flag: {flag}, Timestamp: {timestamp_str}\n\n")
 
             #notify_user(AlertCode.NO_GLASS_BREAK, "4pm", "0440")
-
-
             
             # size_bytes = feature.element_size() * feature.numel()
+        
+        plt.plot(packet)
+        plt.xlabel("Time")
+        plt.ylabel("Amplitude")
+        plt.title(f"Audio Packet {self.n_audio_packets} Plot pre upscale")
+        plt.show(block=True)
 
     async def discover_edge_devices(self):
 
