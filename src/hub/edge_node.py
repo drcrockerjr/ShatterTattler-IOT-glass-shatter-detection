@@ -5,7 +5,7 @@ from datetime import datetime
 
 from collections import deque
 
-logging.basicConfig(level=logging.DEBUG, format='%(asctime)s - %(levelname)s - %(message)s')
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
 class BLEEdgeClient:
     def __init__(self,
