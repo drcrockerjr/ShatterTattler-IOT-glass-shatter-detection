@@ -20,7 +20,7 @@ from bleak import BleakClient, BleakScanner
 # from hub_ble import discover_edge_devices, run_ble_client#, run_queue_consumer
 from dataset import wav_to_feature, index_to_label
 
-logging.basicConfig(level=logging.DEBUG, format='%(asctime)s - %(levelname)s - %(message)s')
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
 
 logger = logging.getLogger(__name__)
