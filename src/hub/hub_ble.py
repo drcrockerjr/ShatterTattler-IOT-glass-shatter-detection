@@ -78,7 +78,7 @@ async def run_queue_consumer(queue: asyncio.Queue):
             # if 1000 in data:
             #     logger.info(f"Recv 1000 Samples after {time.time() - init_recv_t} s")
 """
-async def run_ble_client(device, queue:asyncio.Queue):
+async def run_ble_client(device, queue:asyncio.Queue, shutdown_client):
     
     start_notify_time = 0
 
@@ -110,7 +110,7 @@ async def run_ble_client(device, queue:asyncio.Queue):
                     logger.info(f"Characteristic uuid: {characteristic.uuid}")
                     await client.start_notify(characteristic.uuid, callback_handler)
                     start_notify_time = time.time()
-                    await asyncio.sleep(60)
+                    # await asyncio.sleep(60)
 
                     await client.stop_notify(characteristic.uuid)
                     """
@@ -173,6 +173,7 @@ async def heartbeat_loop(
     except asyncio.CancelledError:
         logger.info("Heartbeat task cancelled")
         raise
+
 
 async def main():
 
