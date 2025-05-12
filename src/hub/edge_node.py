@@ -36,7 +36,7 @@ class BLEEdgeClient:
 
 
     async def _callback(self, sender, data):
-        await self.queue.put((time.time() - self.start_conn_time, sender, data))
+        await self.queue.put((time.time() - self.start_conn_time, sender.uuid, data))
 
     async def connect(self) -> bool:
         """Connect, discover chars, and subscribe to notifies."""

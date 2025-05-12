@@ -99,10 +99,12 @@ class Hub():
             return
 
         aud = struct.unpack('<' + 'h' * (len(data)//2), data)
-        if sender not in self.client_recv_data:
+        if sender not in self.client_recv_data.keys():
             self.client_recv_data[sender] = []
         self.client_recv_data[sender].extend(aud) # Extend buf
         # buffer = self.client_recv_data[sender] # Capture it 
+
+        self.logger.info(f"IN process packet, comparing: {len(self.client_recv_data[sender])} to {self.edge_sample_rate * self.num_audio_sec}")
 
         if len(self.client_recv_data[sender]) >= self.edge_sample_rate * self.num_audio_sec: #  then check 
             # move to a worker
