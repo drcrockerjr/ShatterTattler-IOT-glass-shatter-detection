@@ -87,7 +87,7 @@ class Predictor():
     def predict(self, feature_list):
 
 
-        output, _ = self.model(feature_list, self.model.init_hidden(len()))
+        output, _ = self.model(feature_list, self.model.init_hidden(len(feature_list)))
 
         prediction = torch.max(output, dim=1).indices
         # print(f"[{idx}]Preiction: {prediction}, Shape: {prediction.shape}\n")
