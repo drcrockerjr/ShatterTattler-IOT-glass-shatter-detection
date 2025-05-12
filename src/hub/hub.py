@@ -104,7 +104,7 @@ class Hub():
         self.client_recv_data[sender].extend(aud) # Extend buf
         # buffer = self.client_recv_data[sender] # Capture it 
 
-        self.logger.info(f"IN process packet, comparing: {len(self.client_recv_data[sender])} to {self.edge_sample_rate * self.num_audio_sec}")
+        self.logger.info(f"In process packet, comparing: {len(self.client_recv_data[sender])} to {self.edge_sample_rate * self.num_audio_sec}")
 
         if len(self.client_recv_data[sender]) >= self.edge_sample_rate * self.num_audio_sec: #  then check 
             # move to a worker
@@ -121,7 +121,7 @@ class Hub():
                 epoch, sender, data = await asyncio.wait_for(self.ble_queue.get(), timeout=1.0)
                 self.logger.info(f"Recv data from sender: {sender}, at epoch: {epoch}")
             except asyncio.TimeoutError:
-                self.logger.info(f"Timeout occured before Recv data in mange buffer")
+                # self.logger.info(f"Timeout occured before Recv data in mange buffer")
                 continue
             # await self.process_packet(epoch, sender, data)
             process = asyncio.create_task(self.process_packet(epoch, sender, data))
