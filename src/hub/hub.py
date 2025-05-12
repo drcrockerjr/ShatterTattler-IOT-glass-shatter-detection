@@ -226,7 +226,7 @@ class Hub():
                 for dev in devices:
                     if dev.address in {c.device.address for c in self.connected_edge_nodes}:
                         continue
-                    if len(self.connected_edge_nodes) < self.max_edge_devices:
+                    if len(self.connected_edge_nodes) > self.max_edge_devices:
                         break
 
                     client = BLEEdgeClient(
