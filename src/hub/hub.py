@@ -90,7 +90,7 @@ class Hub():
             self.model_trainer.train_model()
             
         self.logger.info(f" Loading state of existing saved model at path: {self.predictor.state_path}")
-        self.predictor.load_state()
+        self.predictor.load_state("trained_model.pt")
 
 
     async def process_packet(self, epoch, sender, data):
@@ -156,11 +156,11 @@ class Hub():
         size_bytes = feature.element_size() * feature.numel()
 
         prediction = self.predictor.predict(feature)
-        self.logger.info(f" Prediction: {prediction.item()} for Audio packet of device: {str(sender)}")
+        self.logger.info(f" Prediction: {prediction} for Audio packet of device: {str(sender)}")
 
         flag = False
 
-        if prediction.item() == "glassbreak":
+        if prediction == "glassbreak":
             flag = True
             timestamp_str = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
             self.logger.info(f"Glass break happended from device: {uuid}, Flag: {flag}, Timestamp: {timestamp_str}\n\n")

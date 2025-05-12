@@ -62,10 +62,10 @@ class Predictor():
         self.model.to(self.device)
         print(self.model)
 
-        mdl_dir = "saved_model"
+        self.mdl_dir = "saved_model"
         # os.makedirs(mdl_dir, exist_ok=True)
 
-        self.state_path = os.path.join(mdl_dir, "model.pt")
+        self.state_path = os.path.join(self.mdl_dir, "model.pt")
 
         # lr = 0.01
         # weight_decay = 0.0001
@@ -87,13 +87,16 @@ class Predictor():
     def predict(self, feature_in):
 
 
-        # prdict feat 
+        # prdict feat\
+        feature_in = torch.unsqueeze(feature_in, 0)
+
+        self.logger.info(f"Feature shape: {feature_in.shape}")
         output, _ = self.model(feature_in, self.model.init_hidden(1))
 
         prediction = torch.max(output, dim=1).indices
     # print(f"[{idx}]Preiction: {prediction}, Shape: {prediction.shape}\n")
 
-        self.logger(f"Prediction: {index_to_label(prediction.item())} \n\n")
+        self.logger.info(f"Prediction: {index_to_label(prediction)} \n\n")
 
         # if index_to_label(prediction.item()) == "glassbreak":
         #     flag = True
@@ -115,14 +118,19 @@ class Predictor():
             }
             , self.state_path)
 
-    def load_state(self, path: Optional[str] = None):
+    def load_state(self, model_pth: Optional[str] = None):
         
-        if path is None:
+        if model_pth is None:
             dict = torch.load(self.state_path)
+            model_pth = self.state_path
         else:
+
+            path = os.path.join(self.mdl_dir, model_pth)
             dict = torch.load(path)
             
 
         self.epoch = dict["epoch"]
         self.model.load_state_dict(dict["model_state_dict"])
+
+        self.logger.info(f"Loaded model trained to {self.epoch} with name {model_pth}")
         # self.optimizer.load_state_dict(dict["optimizer_state_dict"])
