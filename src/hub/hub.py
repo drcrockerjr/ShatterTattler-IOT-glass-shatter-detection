@@ -96,6 +96,7 @@ class Hub():
         while not self.shutdown_event.is_set():
             try:
                 epoch, sender, data = await asyncio.wait_for(self.ble_queue.get(), timeout=1.0)
+                self.logger.info(f"Recv data from sender: {sender}, at epoch: {epoch}")
             except asyncio.TimeoutError:
                 continue
             # await self.process_packet(epoch, sender, data)
@@ -103,7 +104,7 @@ class Hub():
 
     async def process_packet(self, epoch, sender, data):
         if data is None:
-            self.logger.debug("No audio data")
+            self.logger.info("No audio data")
             return
 
         aud = struct.unpack('<' + 'h' * (len(data)//2), data)
@@ -205,6 +206,7 @@ class Hub():
                     self.logger.info(f"found ESP32 at addr: {dev_addr}, UUIDs: {dev_dict[1]}")
 
                     if len(devices) < self.max_edge_devices:
+                        self.logger.info(f"Adding device to devices")
                         devices.append(dev_dict[0]) # For Bleak better to connect with BLEDevice class
                         break
                     else:
@@ -249,8 +251,13 @@ class Hub():
                     )
                     self.connected_edge_nodes.append(client)
 
+                    self.logger.info(f"Hub starting connct task to client at addr: {dev.address}")
+
                     # connect + notifications
                     self.ble_client_tasks[dev.address] = asyncio.create_task(client.connect())
+
+                    self.logger.info(f"Hub starting heartbeat task to client at addr: {dev.address}")
+
                     # heartbeat
                     self.ble_heartbeat_tasks[dev.address] = asyncio.create_task(
                         client.heartbeat_loop(interval=15.0)

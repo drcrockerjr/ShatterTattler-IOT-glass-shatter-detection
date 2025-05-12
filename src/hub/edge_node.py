@@ -1,6 +1,7 @@
 import time, asyncio
 from bleak import BleakClient, BLEDevice
 import logging
+import datetime
 
 from collections import deque
 
@@ -41,10 +42,14 @@ class BLEEdgeClient:
         self.client = BleakClient(self.device)
         await self.client.connect()
         if not await self.client.is_connected():
+            self.logger.warning(f"Couldn't connect to device {self.device.address}")
             return False
 
-        self.mtu            = self.client.mtu_size
+        self.mtu = self.client.mtu_size
         self.start_conn_time = time.time()
+
+        timestamp_str = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        self.logger.info(f"Successfully connected to device: {self.device.address} at {timestamp_str}")
 
         # Discover and catalog
         services = await self.client.get_services()
@@ -58,6 +63,10 @@ class BLEEdgeClient:
                     self.read_uuids.append(uuid)
                 if "write" in props or "write-without-response" in props:
                     self.write_uuids.append(uuid)
+
+        self.logger.info(f"Device has notify uuids: {self.notify_uuids}\n\n")
+
+        self.logger.info(f"Device has char_props: {self.char_props}\n\n")
 
         # Subscribe
         for uuid in self.notify_uuids:
