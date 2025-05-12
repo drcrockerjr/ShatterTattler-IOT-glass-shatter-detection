@@ -5,7 +5,7 @@ from datetime import datetime
 
 from collections import deque
 
-logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+logging.basicConfig(level=logging.DEBUG, format='%(asctime)s - %(levelname)s - %(message)s')
 
 class BLEEdgeClient:
     def __init__(self,
@@ -71,7 +71,10 @@ class BLEEdgeClient:
         # Subscribe
         for uuid in self.notify_uuids:
             if uuid in self.esp_uuids:
-                await self.client.start_notify(uuid, self._callback)
+                self.logger.info(f"Starting notify with UUID: {uuid}")
+                asyncio.create_task(
+                    self.client.start_notify(uuid, self._callback)
+                )
                 self.logger.info(f"Started notify with UUID: {uuid}")
 
         return True
