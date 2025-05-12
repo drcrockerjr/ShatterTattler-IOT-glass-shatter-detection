@@ -56,29 +56,29 @@ class BLEEdgeClient:
         services = await self.client.get_services()
         for svc in services:
             for ch in svc.characteristics:
-                uuid, props = ch.uuid, ch.properties
-                uuid = uuid.UUID(uuid)
-                self.char_props[uuid] = props
+                recv_uuid, props = ch.uuid, ch.properties
+                recv_uuid = uuid.UUID(recv_uuid)
+                self.char_props[recv_uuid] = props
                 if "notify" in props:
-                    self.notify_uuids.append(uuid)
+                    self.notify_uuids.append(recv_uuid)
                 if "read" in props:
-                    self.read_uuids.append(uuid)
+                    self.read_uuids.append(recv_uuid)
                 if "write" in props or "write-without-response" in props:
-                    self.write_uuids.append(uuid)
+                    self.write_uuids.append(recv_uuid)
 
         self.logger.info(f"Device has notify uuids: {self.notify_uuids}\n\n")
 
         self.logger.info(f"Device has char_props: {self.char_props}\n\n")
 
         # Subscribe
-        for uuid in self.notify_uuids:
-            self.logger.info(f"Testing to see if uuid: {uuid} is in {self.esp_uuids} ")
-            if uuid in self.esp_uuids:
-                self.logger.info(f"Starting notify with UUID: {uuid}")
+        for notfy_uuid in self.notify_uuids:
+            self.logger.info(f"Testing to see if uuid: {notfy_uuid} is in {self.esp_uuids} ")
+            if notfy_uuid in self.esp_uuids:
+                self.logger.info(f"Starting notify with UUID: {notfy_uuid}")
                 asyncio.create_task(
-                    self.client.start_notify(uuid, self._callback)
+                    self.client.start_notify(notfy_uuid, self._callback)
                 )
-                self.logger.info(f"Started notify with UUID: {uuid}")
+                self.logger.info(f"Started notify with UUID: {notfy_uuid}")
 
         return True
 
