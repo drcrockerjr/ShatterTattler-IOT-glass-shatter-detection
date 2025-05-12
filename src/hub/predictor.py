@@ -84,13 +84,14 @@ class Predictor():
             self.writer.add_scalar(f"{global_tag}/{tag}", value, global_step)
             
                 
-    def predict(self, feature_list):
+    def predict(self, feature_in):
 
 
-        output, _ = self.model(feature_list, self.model.init_hidden(len(feature_list)))
+        # prdict feat 
+        output, _ = self.model(feature_in, self.model.init_hidden(1))
 
         prediction = torch.max(output, dim=1).indices
-        # print(f"[{idx}]Preiction: {prediction}, Shape: {prediction.shape}\n")
+    # print(f"[{idx}]Preiction: {prediction}, Shape: {prediction.shape}\n")
 
         self.logger(f"Prediction: {index_to_label(prediction.item())} \n\n")
 

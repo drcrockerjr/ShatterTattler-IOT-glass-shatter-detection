@@ -155,7 +155,7 @@ class Hub():
 
         size_bytes = feature.element_size() * feature.numel()
 
-        prediction = self.predictor.predict([feature])
+        prediction = self.predictor.predict(feature)
         self.logger.info(f" Prediction: {prediction.item()} for Audio packet of device: {str(sender)}")
 
         flag = False
