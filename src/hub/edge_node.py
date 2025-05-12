@@ -2,6 +2,7 @@ import time, asyncio
 from bleak import BleakClient, BLEDevice
 import logging
 from datetime import datetime
+import uuid
 
 from collections import deque
 
@@ -15,7 +16,7 @@ class BLEEdgeClient:
                  shutdown_event: asyncio.Event):
         self.device = device
         self.queue = queue
-        self.esp_uuids = esp_uuids
+        self.esp_uuids = [uuid.UUID(u) for u in esp_uuids]
         self.shutdown_event = shutdown_event
 
         # State
@@ -56,6 +57,7 @@ class BLEEdgeClient:
         for svc in services:
             for ch in svc.characteristics:
                 uuid, props = ch.uuid, ch.properties
+                uuid = uuid.UUID(uuid)
                 self.char_props[uuid] = props
                 if "notify" in props:
                     self.notify_uuids.append(uuid)
