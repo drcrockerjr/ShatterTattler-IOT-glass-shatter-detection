@@ -1,7 +1,7 @@
 import time, asyncio
 from bleak import BleakClient, BLEDevice
 import logging
-import datetime
+from datetime import datetime
 
 from collections import deque
 
