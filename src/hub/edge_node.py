@@ -70,6 +70,7 @@ class BLEEdgeClient:
 
         # Subscribe
         for uuid in self.notify_uuids:
+            self.logger.info(f"Testing to see if uuid: {uuid} is in {self.esp_uuids} ")
             if uuid in self.esp_uuids:
                 self.logger.info(f"Starting notify with UUID: {uuid}")
                 asyncio.create_task(
