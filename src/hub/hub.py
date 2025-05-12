@@ -92,15 +92,6 @@ class Hub():
         self.logger.info(f" Loading state of existing saved model at path: {self.predictor.state_path}")
         self.predictor.load_state()
 
-    async def consume_ble_packets(self):
-        while not self.shutdown_event.is_set():
-            try:
-                epoch, sender, data = await asyncio.wait_for(self.ble_queue.get(), timeout=1.0)
-                self.logger.info(f"Recv data from sender: {sender}, at epoch: {epoch}")
-            except asyncio.TimeoutError:
-                continue
-            # await self.process_packet(epoch, sender, data)
-            asyncio.create_task(self.process_packet(epoch, sender, data))
 
     async def process_packet(self, epoch, sender, data):
         if data is None:
@@ -122,19 +113,18 @@ class Hub():
         
     async def manage_audio_buffer(self):
         self.logger.info("Starting audio consumer")
-        consumer = asyncio.create_task(self.consume_ble_packets())
-        await self.shutdown_event.wait()
-        consumer.cancel()
-        with suppress(asyncio.CancelledError):
-            await consumer
 
-    # def is_ready_classify(self, data):
-        
-    #     # if len(data) > self.edge_sample_rate*self.num_audio_sec:
-    #     if len(data) > self.edge_sample_rate*self.num_audio_sec:
-    #         print(f"{len(data)} -> Whole sample recv")
-    #         return True
-    #     return False
+        while not self.shutdown_event.is_set():
+            try:
+                epoch, sender, data = await asyncio.wait_for(self.ble_queue.get(), timeout=1.0)
+                self.logger.info(f"Recv data from sender: {sender}, at epoch: {epoch}")
+            except asyncio.TimeoutError:
+                self.logger.info(f"Timeout occured before Recv data in mange buffer")
+                continue
+            # await self.process_packet(epoch, sender, data)
+            process = asyncio.create_task(self.process_packet(epoch, sender, data))
+        with suppress(asyncio.CancelledError):
+            await process
 
 
     def classify_packet(self, sender, packet):
@@ -146,7 +136,7 @@ class Hub():
         # self.client_recv_data[str(sender)] = [] # only 
 
         wf = torch.tensor(packet, dtype=torch.float32)
-        self.logger.info(f"\n wf shape: {wf.shape}")
+        self.logger.info(f"\n Wf shape: {wf.shape}\n")
 
 
         # feature = wav_to_feature(wf=wf, sample_rate=self.edge_sample_rate, new_sample_rate=16000)
@@ -205,10 +195,9 @@ class Hub():
                 if dev_dict[0].name == esp_name:
                     self.logger.info(f"found ESP32 at addr: {dev_addr}, UUIDs: {dev_dict[1]}")
 
-                    if len(devices) < self.max_edge_devices:
+                    if len(self.connected_edge_nodes) < self.max_edge_devices:
                         self.logger.info(f"Adding device to devices")
                         devices.append(dev_dict[0]) # For Bleak better to connect with BLEDevice class
-                        break
                     else:
                         self.logger.info(f"Max Device connection exceeded, not adding device: {dev_addr}")
                 else:
@@ -220,11 +209,6 @@ class Hub():
             self.logger.error(f"Encountered error during discovery: {e}")
 
         return devices
-
-
-
-    async def start_edge_ble(self):
-        """Continuously scan for new ESP32 devices and spin up clients."""
 
 
     async def run_hub(self):
@@ -242,6 +226,8 @@ class Hub():
                 for dev in devices:
                     if dev.address in {c.device.address for c in self.connected_edge_nodes}:
                         continue
+                    if len(self.connected_edge_nodes) < self.max_edge_devices:
+                        break
 
                     client = BLEEdgeClient(
                         device=dev,
