@@ -13,11 +13,14 @@ class BLEEdgeClient:
                  device: BLEDevice,
                  queue: asyncio.Queue,
                  esp_uuids: list[str],
+                 alarm:False,
                  shutdown_event: asyncio.Event):
         self.device = device
         self.queue = queue
         self.esp_uuids = [uuid.UUID(u) for u in esp_uuids]
         self.shutdown_event = shutdown_event
+        self.alarm = alarm
+
 
         # State
         self.addr = device.address
@@ -94,6 +97,17 @@ class BLEEdgeClient:
 
         # finally disconnect the BleakClient
         await self.client.disconnect()
+
+    async def set_alarm(self):
+        payload = bytes([1])
+        await self.client.write_gatt_char(self.write_uuids[0], payload)
+
+    async def clear_alarm(self):
+        payload = bytes([0])
+        await self.client.write_gatt_char(self.write_uuids[0], payload)
+
+
+
 
 
     # def packet_ready():

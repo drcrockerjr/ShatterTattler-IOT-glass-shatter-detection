@@ -26,6 +26,8 @@ logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(
 logger = logging.getLogger(__name__)
 
 esp_name = "XIAOESP32S3_BLE_SERVER"
+alarm_name = "XIAOESP32S3_BLE_ALARM"
+charUUID = "616e1a1b-b7e4-4277-a230-5af28c1201a6" #for the alarm node
 
 class Privilege(Enum):
     admin = 1
@@ -46,7 +48,8 @@ class Hub():
         }
 
         self.esp_uuids = [
-            "00002A57-0000-1000-8000-00805F9B34FB"
+            "00002A57-0000-1000-8000-00805F9B34FB",
+            charUUID
         ]
 
         self.shutdown_event = asyncio.Event()
@@ -77,6 +80,7 @@ class Hub():
         self.ble_client_tasks = {}
         self.ble_heartbeat_tasks = {}
         self.audio_buffer = []
+        self.alarm_duration = 30 #alarm duration
 
         self.client_recv_data = {}
 
@@ -162,6 +166,7 @@ class Hub():
 
         if prediction == "glassbreak":
             flag = True
+            asyncio.create_task(self.send_alarm_cmd())
             timestamp_str = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
             self.logger.info(f"Glass break happended from device: {uuid}, Flag: {flag}, Timestamp: {timestamp_str}\n\n")
 
@@ -194,7 +199,7 @@ class Hub():
             for dev_addr, dev_dict in discover_dict.items():
                 # logger.info(f"U: {dev_addr}, N: {dev_dict[0].name}, rssi: {dev_dict[0].rssi}")
                 
-                if dev_dict[0].name == esp_name:
+                if dev_dict[0].name == esp_name or dev_dict[0].name == alarm_name:
                     self.logger.info(f"found ESP32 at addr: {dev_addr}, UUIDs: {dev_dict[1]}")
 
                     if len(self.connected_edge_nodes) < self.max_edge_devices:
@@ -211,6 +216,31 @@ class Hub():
             self.logger.error(f"Encountered error during discovery: {e}")
 
         return devices
+    
+    async def send_alarm_cmd(self):
+        
+        #loop thru all connected clients
+        for client in self.connected_edge_nodes:
+
+            #sets alarms for client
+            if client.alarm:
+                try:
+                    #set alarm and clears after 30 seconds
+                    client.set_alarm()
+                    self.logger.info(f"Alarm ON")
+                    
+                    await asyncio.sleep(self.alarm_duration)
+                                        
+                    client.clear_alarm()
+                    self.logger.info(f"Alarm OFF")
+
+                except Exception as e:
+                    self.logger.error(f"Failed to send alarm cmd: {e}")
+
+
+
+
+
 
 
     async def run_hub(self):
@@ -234,8 +264,9 @@ class Hub():
                     client = BLEEdgeClient(
                         device=dev,
                         queue=self.ble_queue,
-                        esp_uuids=self.esp_uuids,
-                        shutdown_event=self.shutdown_event
+                        esp_uuids= self.esp_uuids,
+                        shutdown_event=self.shutdown_event, 
+                        alarm = True if dev.name == alarm_name else False
                     )
                     self.connected_edge_nodes.append(client)
 
@@ -269,7 +300,8 @@ class Hub():
 
             # call each client.disconnect() to stop notifies + close BLE link
             for client in self.connected_edge_nodes:
-                await client.disconnect()
+                if not client.alarm:
+                    await client.disconnect()
 
             # make sure any outstanding connect() calls finish
             await asyncio.gather(*self.ble_client_tasks, return_exceptions=True)
