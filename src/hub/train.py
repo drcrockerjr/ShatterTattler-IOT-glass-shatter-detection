@@ -63,7 +63,7 @@ class ModelTrainer():
 
         print("Train set size: " + str(len(self.datasets['train'])))
         print("Test set size: " + str(len(self.datasets['val'])))
-    
+        
         self.device = 'cpu'
         num_workers = 0
         pin_memory = False
@@ -73,7 +73,7 @@ class ModelTrainer():
             self.device = 'cuda'
             num_workers = 0
             pin_memory = True
-    
+        
         self.train_loader = torch.utils.data.DataLoader(
             self.datasets['train'], 
             num_workers=num_workers,

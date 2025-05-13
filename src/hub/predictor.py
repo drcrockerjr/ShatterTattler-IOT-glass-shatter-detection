@@ -113,8 +113,8 @@ class Predictor():
 
         torch.save({
             'epoch': self.epoch,
-            'model_state_dict': self.model.state_dict(),
-            'optimizer_state_dict': self.optimizer.state_dict()
+            'model_state_dict': self.model.state_dict()
+            # 'optimizer_state_dict': self.optimizer.state_dict()
             }
             , self.state_path)
 
