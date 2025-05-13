@@ -229,13 +229,13 @@ class Hub():
         
         try:
             while True:
-                alive = client.is_connected
+                alive = client.is_connected()
                 if not alive:
                     self.logger.warning(f"Heartbeat: {client.addr} disconnected; reconnecting…")
                     for attempt in range(1, max_retries + 1):
                         try:
-                            await client.connect()
-                            if client.is_connected:
+                            # await client.is_connected()
+                            if client.is_connected():
                                 self.logger.info(f"Reconnected to {client.addr}")
                                 break
                             else:

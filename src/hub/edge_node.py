@@ -17,6 +17,8 @@ class BLEEdgeClient:
                  samples_per_window: int,
                  alarm:False,
                  shutdown_event: asyncio.Event):
+        
+        self._client = None
         self.device = device
         self.queue = queue
         self.esp_uuids = [uuid.UUID(u) for u in esp_uuids]
@@ -41,6 +43,9 @@ class BLEEdgeClient:
 
         self.last_classify_t = 0
 
+    async def is_connected(self):
+        return self._client.is_connected
+
     async def _callback(self, sender, data):
         if len(self._pcm_buf) == 0: # For tracking how long audio windows take
             self.last_classify_t = time.time()
@@ -61,20 +66,20 @@ class BLEEdgeClient:
 
     async def connect(self) -> bool:
         """Connect, discover chars, and subscribe to notifies."""
-        self.client = BleakClient(self.device)
-        await self.client.connect()
-        if not  self.client.is_connected:
+        self._client = BleakClient(self.device)
+        await self._client.connect()
+        if not self._client.is_connected:
             self.logger.warning(f"Couldn't connect to device {self.device.address}")
             return False
 
-        self.mtu = self.client.mtu_size
+        self.mtu = self._client.mtu_size
         self.start_conn_time = time.time()
 
         timestamp_str = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         self.logger.info(f"Successfully connected to device: {self.device.address} at {timestamp_str}")
 
         # Discover and catalog
-        services = await self.client.get_services()
+        services = await self._client.get_services()
         for svc in services:
             for ch in svc.characteristics:
                 recv_uuid, props = ch.uuid, ch.properties
@@ -98,7 +103,7 @@ class BLEEdgeClient:
             if notfy_uuid in self.esp_uuids:
                 # self.logger.info(f"Starting notify with UUID: {notfy_uuid}")
                 asyncio.create_task(
-                    self.client.start_notify(notfy_uuid, self._callback)
+                    self._client.start_notify(notfy_uuid, self._callback)
                 )
                 self.logger.info(f"Started notify with UUID: {notfy_uuid}")
 
@@ -108,24 +113,24 @@ class BLEEdgeClient:
         """Stop notifies and close connection."""
         # stop notifications
         for uuid in self.notify_uuids:
-            await self.client.stop_notify(uuid)
+            await self._client.stop_notify(uuid)
 
         self.end_conn_time = time.time()
         # signal end-of-data
         await self.queue.put((self.end_conn_time-self.start_conn_time, None, None))
 
         # finally disconnect the BleakClient
-        await self.client.disconnect()
+        await self._client.disconnect()
 
     async def set_alarm(self):
         payload = bytes([1])
         self.logger.info(f"Started write with UUID: {self.write_uuids[0]}")
-        await self.client.write_gatt_char(self.write_uuids[0], payload)
+        await self._client.write_gatt_char(self.write_uuids[0], payload)
 
     async def clear_alarm(self):
         payload = bytes([0])
         self.logger.info(f"Started write with UUID: {self.write_uuids[0]}")
-        await self.client.write_gatt_char(self.write_uuids[0], payload)
+        await self._client.write_gatt_char(self.write_uuids[0], payload)
 
 
 
@@ -142,13 +147,13 @@ class BLEEdgeClient:
     # ):
     #     try:
     #         while True:
-    #             alive = await self.client.is_connected
+    #             alive = await self._client.is_connected
     #             if not alive:
     #                 self.logger.warning(f"Heartbeat: {self.addr} disconnected; reconnecting…")
     #                 for attempt in range(1, max_retries + 1):
     #                     try:
-    #                         await self.client.connect()
-    #                         if await self.client.is_connected:
+    #                         await self._client.connect()
+    #                         if await self._client.is_connected:
     #                             self.logger.info(f"Reconnected to {self.addr}")
     #                             break
     #                         else:
