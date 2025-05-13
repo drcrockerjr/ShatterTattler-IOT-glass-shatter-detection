@@ -213,7 +213,9 @@ def wav_to_feature(wf, sample_rate, new_sample_rate: bool = None, to_mono:bool =
     if new_sample_rate != None: 
         # new_sample_rate = 16000
         transform = torchaudio.transforms.Resample(sample_rate, new_sample_rate, dtype=torch.float32)
-        wf = transform(wf)
+        wf = transform(wf)  
+    else: 
+        new_sample_rate = sample_rate
     
 
     n_fft = 1024

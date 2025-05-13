@@ -112,6 +112,7 @@ class Hub():
             except asyncio.TimeoutError:
                 # self.logger.info(f"Timeout occured before Recv data in mange buffer")
                 continue
+            self.n_audio_packets += 1
             classify = asyncio.create_task(self.classify_packet(epoch, sender, data))
         with suppress(asyncio.CancelledError):
             await classify
@@ -138,6 +139,8 @@ class Hub():
                                     sample_rate=self.edge_sample_rate, 
                                     new_sample_rate=None,
                                     )
+        
+        self.logger.info(f"\n Produced feature with shape: {feature.shape}\n")
 
         feature = feature.to(self.predictor.device)
 
@@ -171,7 +174,7 @@ class Hub():
         plt.plot(packet)
         plt.xlabel("Time")
         plt.ylabel("Amplitude")
-        plt.title(f"Audio Packet {self.n_audio_packets} Plot pre upscale")
+        plt.title(f"Audio Packet Plot ")
         plt.show(block=True)
 
     async def discover_edge_devices(self):
@@ -234,8 +237,8 @@ class Hub():
                     self.logger.warning(f"Heartbeat: {client.addr} disconnected; reconnecting…")
                     for attempt in range(1, max_retries + 1):
                         try:
-                            # await client.is_connected()
-                            if client.is_connected():
+                            conn_exists = await client.connect()
+                            if conn_exists:
                                 self.logger.info(f"Reconnected to {client.addr}")
                                 break
                             else:
