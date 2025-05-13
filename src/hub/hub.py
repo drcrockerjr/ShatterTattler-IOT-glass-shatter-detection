@@ -164,7 +164,8 @@ class Hub():
 
         flag = False
 
-        if prediction == "glassbreak":
+        #if prediction == "glassbreak":
+        if True:
             flag = True
             asyncio.create_task(self.send_alarm_cmd())
             timestamp_str = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
@@ -226,12 +227,12 @@ class Hub():
             if client.alarm:
                 try:
                     #set alarm and clears after 30 seconds
-                    client.set_alarm()
+                    await client.set_alarm()
                     self.logger.info(f"Alarm ON")
                     
                     await asyncio.sleep(self.alarm_duration)
                                         
-                    client.clear_alarm()
+                    await client.clear_alarm()
                     self.logger.info(f"Alarm OFF")
 
                 except Exception as e:

@@ -71,6 +71,7 @@ class BLEEdgeClient:
 
         self.logger.info(f"Device has notify uuids: {self.notify_uuids}\n\n")
 
+        self.logger.info(f"{self.device.address} has write uuids: {self.write_uuids}\n\n")
         self.logger.info(f"Device has char_props: {self.char_props}\n\n")
 
         # Subscribe
@@ -100,10 +101,12 @@ class BLEEdgeClient:
 
     async def set_alarm(self):
         payload = bytes([1])
+        self.logger.info(f"Started write with UUID: {self.write_uuids[0]}")
         await self.client.write_gatt_char(self.write_uuids[0], payload)
 
     async def clear_alarm(self):
         payload = bytes([0])
+        self.logger.info(f"Started write with UUID: {self.write_uuids[0]}")
         await self.client.write_gatt_char(self.write_uuids[0], payload)
 
 
