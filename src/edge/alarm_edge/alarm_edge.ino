@@ -17,8 +17,7 @@
 BLECharacteristic *pCharacteristic;
 bool deviceConnected = false;
 
-//BLE Callback funcs
-/*OG
+//BLE Callback funcs/
 class MyServerCallbacks: public BLEServerCallbacks {
   void onConnect(BLEServer* pServer) {
     deviceConnected = true;
@@ -26,11 +25,20 @@ class MyServerCallbacks: public BLEServerCallbacks {
   
   void onDisconnect(BLEServer* pServer) {
     deviceConnected = false;
+    digitalWrite(ALARM_PIN, LOW);
+    digitalWrite(LED_BUILTIN, LOW);
+    Serial.println("Central disconnected — restart advertising");
+    pServer->getAdvertising()->start();      // <‑‑ key line
+
   }
-};*/
+};
 class MyCharacteristicCallbacks : public BLECharacteristicCallbacks {
   void onWrite(BLECharacteristic *pChar)   {
+        
+    Serial.println("Receiving Write! ");
     String value = pChar->getValue();    // Arduino String
+    Serial.print("VALUE RECEIVED: ");
+    Serial.print((uint8_t)value[0]);
     //if (value.length() < 2) return;
     if (!value) return;
 
@@ -41,7 +49,6 @@ class MyCharacteristicCallbacks : public BLECharacteristicCallbacks {
 
       Serial.print("VALUE RECEIVED: ");
       Serial.print((uint8_t)value[0]);
-      Serial.print
 
     
 
@@ -73,6 +80,7 @@ void setup() {
   // Start Bluetooth server and handle setup
   BLEDevice::init(bleServerName);
   BLEServer *pServer = BLEDevice::createServer();
+  pServer->setCallbacks(new MyServerCallbacks());   // <‑‑ register 
 
 
   BLEService *pService = pServer->createService(SERVICE_UUID); //created service with custom made UUID
