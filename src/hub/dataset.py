@@ -246,10 +246,14 @@ def wav_to_feature(wf, sample_rate, new_sample_rate: bool = None, to_mono:bool =
     # window length in samples (e.g. 10 ms)
     window_ms   = 10
     window_size = max(3, int(window_ms * sample_rate / 1000))  # at least 3 samples
+    # make sure window isn't longer than the clip itself
+    T_len = soundData.shape[-1]
+    window_size = max(3, min(T_len, int(window_ms * sample_rate / 1000)))
 
     # build a 1-D box filter kernel per channel
     channels = soundData.size(0)
-    kernel = torch.ones(channels, 1, window_size, device=soundData.device) / window_size
+    kernel = torch.ones(channels, 1, window_size, device=soundData.device) / float(window_size)
+
 
     # smooth (pad='same')
     x = soundData.unsqueeze(0)  # -> [1, C, T]
