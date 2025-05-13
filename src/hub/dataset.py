@@ -7,6 +7,8 @@ import pandas as pd
 from sklearn.model_selection import train_test_split
 from plot_utils import plot_spectrogram
 import matplotlib.pyplot as plt
+import torch.nn.functional as F      # <— for conv1d
+
 
 DATA_LABELS = ["gunshot", "babycry", "glassbreak"]
 
