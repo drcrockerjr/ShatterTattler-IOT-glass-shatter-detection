@@ -48,15 +48,20 @@ class Hub():
         }
 
         self.esp_uuids = [
-            "00002A57-0000-1000-8000-00805F9B34FB",
-            charUUID
+            "00002A57-0000-1000-8000-00805F9B34FB", # Edge node uuid
+            "616e1a1b-b7e4-4277-a230-5af28c1201a6" # Alarm node uuid
+        ]
+
+        self._supported_edge_names = [
+            "XIAOESP32S3_BLE_SERVER",
+            "XIAOESP32S3_BLE_ALARM"
         ]
 
         self.shutdown_event = asyncio.Event()
 
         self.n_audio_packets = 0
 
-        self.connected_edge_nodes = []
+        self.connected_edge_nodes = {}
 
         # Signal Processing
         self.sample_rate = 16000
@@ -96,26 +101,6 @@ class Hub():
         self.logger.info(f" Loading state of existing saved model at path: {self.predictor.state_path}")
         self.predictor.load_state("trained_model.pt")
 
-
-    async def process_packet(self, epoch, sender, data):
-        if data is None:
-            self.logger.info("No audio data")
-            return
-
-        aud = struct.unpack('<' + 'h' * (len(data)//2), data)
-        if sender not in self.client_recv_data.keys():
-            self.client_recv_data[sender] = []
-        self.client_recv_data[sender].extend(aud) # Extend buf
-        # buffer = self.client_recv_data[sender] # Capture it 
-
-        self.logger.info(f"In process packet, comparing: {len(self.client_recv_data[sender])} to {self.edge_sample_rate * self.num_audio_sec}")
-
-        if len(self.client_recv_data[sender]) >= self.edge_sample_rate * self.num_audio_sec: #  then check 
-            # move to a worker
-            buf = self.client_recv_data[sender].copy()
-            self.client_recv_data[sender] = []
-            asyncio.create_task(self.classify_packet(sender, buf))
-
         
     async def manage_audio_buffer(self):
         self.logger.info("Starting audio consumer")
@@ -127,13 +112,12 @@ class Hub():
             except asyncio.TimeoutError:
                 # self.logger.info(f"Timeout occured before Recv data in mange buffer")
                 continue
-            # await self.process_packet(epoch, sender, data)
-            process = asyncio.create_task(self.process_packet(epoch, sender, data))
+            classify = asyncio.create_task(self.classify_packet(epoch, sender, data))
         with suppress(asyncio.CancelledError):
-            await process
+            await classify
 
 
-    def classify_packet(self, sender, packet):
+    def classify_packet(self, epoch, sender, packet):
         
         uuid = "0440"
         with open(f"audio_wav{self.n_audio_packets}.txt", "a") as f:
@@ -152,7 +136,7 @@ class Hub():
                 
         feature = wav_to_feature(wf=wf, 
                                     sample_rate=self.edge_sample_rate, 
-                                    new_sample_rate=16000,
+                                    new_sample_rate=None,
                                     )
 
         feature = feature.to(self.predictor.device)
@@ -200,14 +184,10 @@ class Hub():
             for dev_addr, dev_dict in discover_dict.items():
                 # logger.info(f"U: {dev_addr}, N: {dev_dict[0].name}, rssi: {dev_dict[0].rssi}")
                 
-                if dev_dict[0].name == esp_name or dev_dict[0].name == alarm_name:
-                    self.logger.info(f"found ESP32 at addr: {dev_addr}, UUIDs: {dev_dict[1]}")
-
-                    if len(self.connected_edge_nodes) < self.max_edge_devices:
-                        self.logger.info(f"Adding device to devices")
-                        devices.append(dev_dict[0]) # For Bleak better to connect with BLEDevice class
-                    else:
-                        self.logger.info(f"Max Device connection exceeded, not adding device: {dev_addr}")
+                if dev_dict[0].name in self._supported_edge_names:
+                    self.logger.info(f"Found supported ESP32 at addr: {dev_addr}, UUIDs: {dev_dict[1]}")
+                    self.logger.info(f"Adding device to devices")
+                    devices.append(dev_dict[0]) # For Bleak better to connect with BLEDevice class
                 else:
                     # logger.info(f"Target device not found. Retrying after 1 second...")
                     # await asyncio.sleep(1)
@@ -221,7 +201,7 @@ class Hub():
     async def send_alarm_cmd(self):
         
         #loop thru all connected clients
-        for client in self.connected_edge_nodes:
+        for client in self.connected_edge_nodes.values():
 
             #sets alarms for client
             if client.alarm:
@@ -239,7 +219,51 @@ class Hub():
                     self.logger.error(f"Failed to send alarm cmd: {e}")
 
 
+    async def heartbeat_servicer(
+        self,
+        client:BLEEdgeClient,
+        interval: float = 30.0,
+        max_retries: int = 5,
+        retry_delay: int = 5
+    ):
+        
+        try:
+            while True:
+                alive = client.is_connected
+                if not alive:
+                    self.logger.warning(f"Heartbeat: {client.addr} disconnected; reconnecting…")
+                    for attempt in range(1, max_retries + 1):
+                        try:
+                            await client.connect()
+                            if client.is_connected:
+                                self.logger.info(f"Reconnected to {client.addr}")
+                                break
+                            else:
+                                self.logger.error(
+                                    f"Reconnect attempt {attempt} failed (still disconnected)"
+                                )
+                        except Exception as e:
+                            self.logger.error(f"Reconnect attempt {attempt} error: {e}")
 
+                        if attempt < max_retries:
+                            await asyncio.sleep(retry_delay)
+                        else:
+                            self.logger.error(
+                                f"Failed to {client.addr} reconnect after {max_retries} attempts."
+                            )
+                            
+                            # client.disconnect()
+
+                            # self.connected_edge_nodes.pop(client.addr, None) # Get rid of dead edge node
+
+                            # return
+                            
+                else:
+                    self.logger.debug(f"Heartbeat OK: {client.addr}")
+                await asyncio.sleep(interval)
+        except asyncio.CancelledError:
+            self.logger.info("Heartbeat task cancelled")
+            raise
 
 
 
@@ -255,35 +279,34 @@ class Hub():
 
         try:
             while not self.shutdown_event.is_set():
-                devices = await self.discover_edge_devices()
-                for dev in devices:
-                    if dev.address in {c.device.address for c in self.connected_edge_nodes}:
-                        continue
-                    if len(self.connected_edge_nodes) > self.max_edge_devices:
-                        break
+                if len(self.connected_edge_nodes.values()) < self.max_edge_devices: # Only discover if nodes
+                    devices = await self.discover_edge_devices()
+                    for dev in devices:
+                        if dev.address in self.connected_edge_nodes.keys():
+                            continue
 
-                    client = BLEEdgeClient(
-                        device=dev,
-                        queue=self.ble_queue,
-                        esp_uuids= self.esp_uuids,
-                        shutdown_event=self.shutdown_event, 
-                        alarm = True if dev.name == alarm_name else False
-                    )
-                    self.connected_edge_nodes.append(client)
+                        client = BLEEdgeClient( # TODO: make client initialize with sample rate and number of seconds of audio
+                            device=dev,
+                            queue=self.ble_queue,
+                            esp_uuids= self.esp_uuids,
+                            samples_per_window=self.edge_sample_rate * self.num_audio_sec,
+                            shutdown_event=self.shutdown_event, 
+                            alarm = True if dev.name == alarm_name else False
+                        )
+                        self.connected_edge_nodes[dev.address] = client
 
-                    self.logger.info(f"Hub starting connct task to client at addr: {dev.address}")
+                        self.logger.info(f"Hub starting connct task to client at addr: {dev.address}")
 
-                    # connect + notifications
-                    self.ble_client_tasks[dev.address] = asyncio.create_task(client.connect())
+                        # connect + notifications
+                        self.ble_client_tasks[dev.address] = asyncio.create_task(client.connect())
 
-                    self.logger.info(f"Hub starting heartbeat task to client at addr: {dev.address}")
+                        self.logger.info(f"Hub starting heartbeat task to client at addr: {dev.address}")
 
-                    # heartbeat
-                    self.ble_heartbeat_tasks[dev.address] = asyncio.create_task(
-                        client.heartbeat_loop(interval=15.0)
-                    )
-
-                await asyncio.sleep(2.0)
+                        # heartbeat
+                        self.ble_heartbeat_tasks[dev.address] = asyncio.create_task(
+                            self.heartbeat_servicer(client=client, interval=15.0)
+                        )
+                await asyncio.sleep(1.0)
 
         except KeyboardInterrupt:
             self.shutdown_event.set()
@@ -300,7 +323,7 @@ class Hub():
                     await hb
 
             # call each client.disconnect() to stop notifies + close BLE link
-            for client in self.connected_edge_nodes:
+            for client in self.connected_edge_nodes.values():
                 if not client.alarm:
                     await client.disconnect()
 
