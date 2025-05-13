@@ -1,63 +1,31 @@
-# from sinch import SinchClient
-# import notification_keys
-
-# # sinch_client = SinchClient(
-# #     key_id=notification_keys.sinch_key_id,
-# #     key_secret=notification_keys.sinch_key_secret,
-# #     project_id=notification_keys.sinch_project_id
-# # )
-
-# glass_break_msg = "A glass break has been detected"
-
-
-# def notifiy_glass_break(device_id, timestamp):
-#     sinch_client = SinchClient(
-#         key_id=notification_keys.sinch_key_id,
-#         key_secret=notification_keys.sinch_key_secret,
-#         project_id=notification_keys.sinch_project_id
-#     )
-
-#     glass_break_msg = f"A glass break has been detected at device {device_id} at {timestamp} !!"
-
-
-#     send_batch_response = sinch_client.sms.batches.send(
-#         body=glass_break_msg,
-#         to=["9713128722"],
-#         from_="2085813084",
-#         delivery_report="none"
-#     )
-
-#     print(send_batch_response)
-
-# send_batch_response = sinch_client.sms.batches.send(
-#     body="Hello from Sinch!",
-#     to=["9713128722"],
-#     from_="2085813084",
-#     delivery_report="none"
-# )
-
-
 from enum import Enum
 import notification_keys
 import smtplib
 from typing import Optional
 from email.message import EmailMessage
+import json
 
 class AlertCode(Enum):
     GLASS_BREAK = 1
     POSSIBLE_GLASS_BREAK = 2
     NO_GLASS_BREAK = 3
+    PERIODIC_REPORT = 4
 
 
 
-def notify_user(alert_code:AlertCode, time_stamp:str, device_id:str):
+def notify_user(alert_code:AlertCode, time_stamp:str, device_id:str, extra_info: dict = None):
     msg = EmailMessage()
 
+    alert = None
     if alert_code == AlertCode.GLASS_BREAK:
 
         alert = f"Glass break has been detected from device {device_id} at {time_stamp}"
     elif alert_code == AlertCode.NO_GLASS_BREAK:
         alert = f"Sound was recorded, but NO glass break detected from device {device_id} as {time_stamp}"
+    # elif alert_code == AlertCode.NO_GLASS_BREAK:
+
+
+    payload = alert + "\n\n" + json.dumps(extra_info, indent=2)
 
     msg.set_content(alert)
 

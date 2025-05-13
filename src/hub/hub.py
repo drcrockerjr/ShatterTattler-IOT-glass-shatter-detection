@@ -232,7 +232,7 @@ class Hub():
         
         try:
             while True:
-                alive = client.is_connected()
+                alive = await client.is_connected()
                 if not alive:
                     self.logger.warning(f"Heartbeat: {client.addr} disconnected; reconnecting…")
                     for attempt in range(1, max_retries + 1):
@@ -268,6 +268,9 @@ class Hub():
             self.logger.info("Heartbeat task cancelled")
             raise
 
+    async def notification_servicer(self, 
+                                    minute_interval: int = 5):
+        pass
 
 
 

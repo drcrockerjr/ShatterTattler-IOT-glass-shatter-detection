@@ -4,6 +4,7 @@ import logging
 from datetime import datetime
 import uuid
 import struct
+import math
 
 from collections import deque
 
@@ -24,7 +25,7 @@ class BLEEdgeClient:
         self.esp_uuids = [uuid.UUID(u) for u in esp_uuids]
         self.shutdown_event = shutdown_event
         self.alarm = alarm
-        self._pcm_buf = []
+        self._pcm_buf = deque()
 
         self.samples_per_window = samples_per_window
         # State
@@ -43,7 +44,7 @@ class BLEEdgeClient:
 
         self.last_classify_t = 0
 
-    def is_connected(self):
+    async def is_connected(self):
         return self._client.is_connected
 
     async def _callback(self, sender, data):
@@ -53,14 +54,13 @@ class BLEEdgeClient:
         aud = struct.unpack('<' + 'h' * (len(data)//2), data)
         self._pcm_buf.extend(aud)
 
-        total_packets = (self.samples_per_window) / len(aud)
-        existing_packets = len(self._pcm_buf) / len(aud)
+        total_packets = math.ceil((self.samples_per_window) / len(aud))
+        existing_packets = math.ceil(len(self._pcm_buf) / len(aud))
         
         self.logger.info(f"Node: {self.addr}: Recv {existing_packets}/{total_packets} audio packets after {time.time() - self.last_classify_t} sec")
 
         if len(self._pcm_buf) >= self.samples_per_window:
-            chunk = self._pcm_buf[:self.samples_per_window]
-            del self._pcm_buf[:self.samples_per_window]
+            chunk = [self._pcm_buf.popleft() for _ in range(self.samples_per_window)]
             await self.queue.put((time.time() - self.last_classify_t, self.addr, chunk))
             self.last_classify_t = time.time()
 
@@ -68,7 +68,7 @@ class BLEEdgeClient:
         """Connect, discover chars, and subscribe to notifies."""
         self._client = BleakClient(self.device)
         await self._client.connect()
-        if not self._client.is_connected:
+        if not await self._client.is_connected:
             self.logger.warning(f"Couldn't connect to device {self.device.address}")
             return False
 
