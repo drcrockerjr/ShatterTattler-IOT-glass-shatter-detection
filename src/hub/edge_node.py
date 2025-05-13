@@ -44,7 +44,7 @@ class BLEEdgeClient:
         self.last_classify_t = 0
 
     async def is_connected(self):
-        return self._client.is_connected
+        return await self._client.is_connected
 
     async def _callback(self, sender, data):
         if len(self._pcm_buf) == 0: # For tracking how long audio windows take

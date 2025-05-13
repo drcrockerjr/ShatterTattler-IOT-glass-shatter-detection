@@ -333,7 +333,7 @@ class Hub():
             self.logger.info("Hub cleanly shut down")
 
 if __name__=="__main__":
-    hub = Hub(load_trainer=True, retrain=False)
+    hub = Hub(load_trainer=False, retrain=False)
 
     asyncio.run(hub.run_hub())
 
