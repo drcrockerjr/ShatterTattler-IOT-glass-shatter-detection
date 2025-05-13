@@ -240,6 +240,26 @@ def wav_to_feature(wf, sample_rate, new_sample_rate: bool = None, to_mono:bool =
 
     # soundData = tempData
 
+    # ─── 3) Spike removal via moving average ───
+    # window length in samples (e.g. 10 ms)
+    window_ms   = 10
+    window_size = max(3, int(window_ms * sample_rate / 1000))  # at least 3 samples
+
+    # build a 1-D box filter kernel per channel
+    channels = soundData.size(0)
+    kernel = torch.ones(channels, 1, window_size, device=soundData.device) / window_size
+
+    # smooth (pad='same')
+    x = soundData.unsqueeze(0)  # -> [1, C, T]
+    smoothed = F.conv1d(x, kernel, padding=window_size // 2, groups=channels)
+    smoothed = smoothed.squeeze(0)  # -> [C, T]
+
+    # detect “spikes” and replace them
+    threshold = 0.1  # adjust to your signal’s amplitude scale
+    diff = (soundData - smoothed).abs()
+    soundData = torch.where(diff > threshold, smoothed, soundData)
+    # ──────────────────────────────────────────
+
     mel_specgram = torchaudio.transforms.MelSpectrogram(
         sample_rate=new_sample_rate
         # n_mels=40
