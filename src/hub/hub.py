@@ -291,6 +291,7 @@ class Hub():
 
     #only reads from one edge device
     async def read_device_battery(self):
+        self.logger("READING! BATTERY")
         for nodes in self.edge_nodes:
                 self.logger("this is curr {nodes}")
                 if self.edge_nodes.is_alarm() != 1:
@@ -298,6 +299,8 @@ class Hub():
                     self.logger("collected vbat reading: {device_vbat}")
                 else:
                     device_vbat = "failed to read battery"
+                    self.logger("failed to read battery")
+
 
     async def report_servicer(
         self,
