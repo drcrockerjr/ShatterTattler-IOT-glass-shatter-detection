@@ -44,7 +44,7 @@ class BLEEdgeClient:
 
         self.last_classify_t = 0
 
-    async def is_connected(self):
+    def is_connected(self):
         return self._client.is_connected
 
     async def _callback(self, sender, data):
@@ -68,7 +68,7 @@ class BLEEdgeClient:
         """Connect, discover chars, and subscribe to notifies."""
         self._client = BleakClient(self.device)
         await self._client.connect()
-        if not await self._client.is_connected:
+        if not self._client.is_connected:
             self.logger.warning(f"Couldn't connect to device {self.device.address}")
             return False
 

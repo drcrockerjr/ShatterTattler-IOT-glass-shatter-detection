@@ -151,8 +151,8 @@ class Hub():
 
         flag = False
 
-        #if prediction == "glassbreak":
-        if True:
+        if prediction == "glassbreak":
+        #if True:
             flag = True
             asyncio.create_task(self.send_alarm_cmd())
             timestamp_str = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
@@ -232,7 +232,8 @@ class Hub():
         
         try:
             while True:
-                alive = await client.is_connected()
+                await asyncio.sleep(interval)
+                alive = client.is_connected()
                 if not alive:
                     self.logger.warning(f"Heartbeat: {client.addr} disconnected; reconnecting…")
                     for attempt in range(1, max_retries + 1):
@@ -263,7 +264,6 @@ class Hub():
                             
                 else:
                     self.logger.debug(f"Heartbeat OK: {client.addr}")
-                await asyncio.sleep(interval)
         except asyncio.CancelledError:
             self.logger.info("Heartbeat task cancelled")
             raise

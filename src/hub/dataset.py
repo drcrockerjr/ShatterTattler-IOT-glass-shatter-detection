@@ -241,7 +241,7 @@ def wav_to_feature(wf, sample_rate, new_sample_rate: bool = None, to_mono:bool =
     #     tempData = soundData[:, :self.max_event_length]
 
     # soundData = tempData
-
+    
     # ─── 3) Spike removal via moving average ───
     # window length in samples (e.g. 10 ms)
     window_ms   = 10
@@ -254,18 +254,32 @@ def wav_to_feature(wf, sample_rate, new_sample_rate: bool = None, to_mono:bool =
     channels = soundData.size(0)
     kernel = torch.ones(channels, 1, window_size, device=soundData.device) / float(window_size)
 
-
+    
     # smooth (pad='same')
     x = soundData.unsqueeze(0)  # -> [1, C, T]
     smoothed = F.conv1d(x, kernel, padding=window_size // 2, groups=channels)
     smoothed = smoothed.squeeze(0)  # -> [C, T]
 
+    smoothed = smoothed[:, :smoothed.size(1)-1]
+    print(f"Shape of smoothed: {smoothed.shape}")
+    
     # detect “spikes” and replace them
     threshold = 0.1  # adjust to your signal’s amplitude scale
     diff = (soundData - smoothed).abs()
     soundData = torch.where(diff > threshold, smoothed, soundData)
     # ──────────────────────────────────────────
+    
+    kernel_size = 5
+    p = kernel_size // 2
+    soundData = soundData.unsqueeze(0)
+    soundData = F.pad(soundData, (p, p), mode='reflect')
 
+    patches = soundData.unfold(2, kernel_size, 1)
+    med = patches.median(dim=3).values
+
+    soundData = med.squeeze(0)
+
+    print(f"Shape of SoundData: {soundData.shape}")
     mel_specgram = torchaudio.transforms.MelSpectrogram(
         sample_rate=new_sample_rate
         # n_mels=40
