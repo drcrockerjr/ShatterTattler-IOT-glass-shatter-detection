@@ -339,7 +339,7 @@ class Hub():
         audio_consumer = asyncio.create_task(self.manage_audio_buffer())
 
         report_task = asyncio.create_task(self.report_servicer(
-            report_interval= 60*5  # every 5 minutes
+            report_interval= 60  # every 2 minute(s)
         ))
 
         # launch discovery in background
