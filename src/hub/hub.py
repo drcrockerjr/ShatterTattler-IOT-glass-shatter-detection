@@ -291,15 +291,10 @@ class Hub():
 
     #only reads from one edge device
     async def read_device_battery(self):
-        self.logger("READING! BATTERY")
-        for nodes in self.edge_nodes:
-                self.logger("this is curr {nodes}")
-                if self.edge_nodes.is_alarm() != 1:
-                    device_vbat = self.edge_nodes.get_vbat()
-                    self.logger("collected vbat reading: {device_vbat}")
-                else:
-                    device_vbat = "failed to read battery"
-                    self.logger("failed to read battery")
+        for node in self.connected_edge_nodes.values():
+                if not node.alarm:
+                    device_vbat = await node.get_vbat()
+        return device_vbat
 
 
     async def report_servicer(
@@ -313,14 +308,15 @@ class Hub():
           2) call your periodic_report logic
           3) reset counts / move prev_time_stamp forward
         """
-        prev_ts = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        prev_ts = datetime.now().strftime("%B-%d-%Y at %H:%M:%S")
         while not self.shutdown_event.is_set():
             await asyncio.sleep(report_interval)
 
-            curr_ts = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+            curr_ts = datetime.now().strftime("%B-%d-%Y at %H:%M:%S")
             
             #read battery voltage from client :
             device_vbat = await self.read_device_battery() #only reports battery from one edge device
+            #self.logger.info(f"collected vbat reading: {device_vbat}")
 
             # call out to your free function (or you can inline it here)
             periodic_report(
@@ -345,7 +341,7 @@ class Hub():
         audio_consumer = asyncio.create_task(self.manage_audio_buffer())
 
         report_task = asyncio.create_task(self.report_servicer(
-            report_interval= 60  # every 2 minute(s)
+            report_interval= 60 * 2  # every 2 minute(s)
         ))
 
         # launch discovery in background

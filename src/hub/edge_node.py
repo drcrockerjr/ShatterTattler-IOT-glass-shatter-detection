@@ -28,7 +28,7 @@ class BLEEdgeClient:
         self.shutdown_event = shutdown_event
         self.alarm = alarm
         self._pcm_buf = deque()
-        self.vbat = random_number = random.uniform(3.5, 3.7)
+        self.vbat = random_number = round(random.uniform(3.5, 3.7), 4)
         self.samples_per_window = samples_per_window
         # State
         self.addr = device.address

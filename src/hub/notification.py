@@ -47,8 +47,8 @@ def periodic_report(alarm_state, curr_time_stamp:str, prev_time_stamp,device_id:
     msg = EmailMessage()
     report = (
             f"Periodic report for {device_id} @ {curr_time_stamp}\n\n"
-            f"Number of Detected Glass Break detections since {prev_time_stamp} is {alarm_state['red']}\n\n "
-            f"Number of Potential Glass Break detections since {prev_time_stamp} is {alarm_state['yellow']} \n\n"
+            f"Number of Detected Glass Break detections is {alarm_state['red']} since {prev_time_stamp}\n\n"
+            f"Number of Potential Glass Break detections is {alarm_state['yellow']} since {prev_time_stamp}\n\n"
             f"Edge Detection Device Battery Level (Voltage): {device_vbat}\n\n"
         )
     msg.set_content(report)
