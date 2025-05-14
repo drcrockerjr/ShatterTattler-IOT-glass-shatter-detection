@@ -101,7 +101,7 @@ class Hub():
         self.logger.info(f" Loading state of existing saved model at path: {self.predictor.state_path}")
         self.predictor.load_state("trained_model.pt")
 
-        
+    """        
     async def manage_audio_buffer(self):
         self.logger.info("Starting audio consumer")
 
@@ -114,11 +114,27 @@ class Hub():
                 continue
             self.n_audio_packets += 1
             classify = asyncio.create_task(self.classify_packet(epoch, sender, data))
+            self.logger.info(f"Finished classify")
         with suppress(asyncio.CancelledError):
             await classify
+    """
 
+    async def manage_audio_buffer(self):
+        self.logger.info("Starting audio consumer")
+        while not self.shutdown_event.is_set():
+            try:
+                epoch, sender, data = await asyncio.wait_for(self.ble_queue.get(), timeout=1.0)
+                self.logger.info(f"Recv data from {sender} at {epoch}")
+            except asyncio.TimeoutError:
+                self.logger.debug("Queue empty; looping again")
+                continue
 
-    def classify_packet(self, epoch, sender, packet):
+            self.n_audio_packets += 1
+            # fire-and-forget
+            asyncio.create_task(self.classify_packet(epoch, sender, data))
+            self.logger.info("Scheduled classify task")
+
+    async def classify_packet(self, epoch, sender, packet):
         
         uuid = "0440"
         with open(f"audio_wav{self.n_audio_packets}.txt", "a") as f:
@@ -170,12 +186,12 @@ class Hub():
             #notify_user(AlertCode.NO_GLASS_BREAK, "4pm", "0440")
             
             # size_bytes = feature.element_size() * feature.numel()
-        
-        plt.plot(packet)
-        plt.xlabel("Time")
-        plt.ylabel("Amplitude")
-        plt.title(f"Audio Packet Plot ")
-        plt.show(block=True)
+        self.logger.info(f"finished classify function")
+        # plt.plot(packet)
+        # plt.xlabel("Time")
+        # plt.ylabel("Amplitude")
+        # plt.title(f"Audio Packet Plot ")
+        # plt.show(block=False)
 
     async def discover_edge_devices(self):
 

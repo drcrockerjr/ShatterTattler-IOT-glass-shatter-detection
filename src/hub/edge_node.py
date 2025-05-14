@@ -58,9 +58,11 @@ class BLEEdgeClient:
         existing_packets = math.ceil(len(self._pcm_buf) / len(aud))
         
         self.logger.info(f"Node: {self.addr}: Recv {existing_packets}/{total_packets} audio packets after {time.time() - self.last_classify_t} sec")
-
+        
+        self.logger.info(f"Node: {self.addr}, buffer len {len(self._pcm_buf)}")
         if len(self._pcm_buf) >= self.samples_per_window:
             chunk = [self._pcm_buf.popleft() for _ in range(self.samples_per_window)]
+            self.logger.info("Putting chunck in queue")
             await self.queue.put((time.time() - self.last_classify_t, self.addr, chunk))
             self.last_classify_t = time.time()
 
