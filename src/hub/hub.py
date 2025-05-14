@@ -315,7 +315,7 @@ class Hub():
             curr_ts = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
             
             #read battery voltage from client :
-            device_vbat = await self.read_battery_level() #only reports battery from one edge device
+            device_vbat = await self.read_device_battery() #only reports battery from one edge device
 
             # call out to your free function (or you can inline it here)
             periodic_report(
@@ -328,6 +328,7 @@ class Hub():
             )
 
             # reset your counters if you want "since last report"
+            self.logger.info("Sent Periodic Report")
             self.alarm_state["red"] = 0
             self.alarm_state["yellow"] = 0
             prev_ts = curr_ts
