@@ -9,7 +9,7 @@ import time
 import matplotlib.pyplot as plt
 import torch
 from datetime import datetime
-from notification import AlertCode, notify_user
+from notification import AlertCode, notify_user, periodic_report
 from dataclasses import dataclass, field
 from contextlib import suppress
 
@@ -42,9 +42,9 @@ class Hub():
     def __init__(self, load_trainer:bool= True, retrain:bool=False):
         self.edge_nodes = []
         self.alarm_state = {
-            "green": False,
-            "yellow": False,
-            "red": False
+            #"green": False,
+            "yellow": 0,
+            "red": 0
         }
 
         self.esp_uuids = [
@@ -171,6 +171,7 @@ class Hub():
         #if True:
             flag = True
             asyncio.create_task(self.send_alarm_cmd())
+            self.alarm_state["red"] += 1
             timestamp_str = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
             self.logger.info(f"Glass break happended from device: {uuid}, Flag: {flag}, Timestamp: {timestamp_str}\n\n")
 
@@ -180,7 +181,7 @@ class Hub():
         else:
             timestamp_str = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
             # f.write(f"Sound dected but NO glass break happended from device: {uuid}, Flag: {flag}, Timestamp: {timestamp_str}\n\n")
-
+            self.alarm_state["yellow"] += 1
             self.logger.info(f"Sound dected but NO glass break happended from device: {uuid}, Flag: {flag}, Timestamp: {timestamp_str}\n\n")
 
             #notify_user(AlertCode.NO_GLASS_BREAK, "4pm", "0440")
@@ -288,13 +289,58 @@ class Hub():
                                     minute_interval: int = 5):
         pass
 
+    #only reads from one edge device
+    async def read_device_battery(self):
+        for nodes in self.edge_nodes:
+                if self.edge_nodes.is_alarm() == 1:
+                    device_vbat = self.edge_nodes.get_vbat()
+                else:
+                    device_vbat = "failed to read battery"
 
+    async def report_servicer(
+        self,
+        report_interval: float = 60.0,     # seconds between reports
+        device_id: str = "ALL_DEVICES"
+    ):
+        """
+        Every report_interval seconds:
+          1) grab the current time
+          2) call your periodic_report logic
+          3) reset counts / move prev_time_stamp forward
+        """
+        prev_ts = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        while not self.shutdown_event.is_set():
+            await asyncio.sleep(report_interval)
+
+            curr_ts = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+            
+            #read battery voltage from client :
+            device_vbat = await self.read_battery_level() #only reports battery from one edge device
+
+            # call out to your free function (or you can inline it here)
+            periodic_report(
+                alarm_state=self.alarm_state,
+                curr_time_stamp=curr_ts,
+                prev_time_stamp=prev_ts,
+                device_id=device_id,
+                device_vbat=device_vbat,
+                report_interval=report_interval
+            )
+
+            # reset your counters if you want "since last report"
+            self.alarm_state["red"] = 0
+            self.alarm_state["yellow"] = 0
+            prev_ts = curr_ts
 
     async def run_hub(self):
         self.initialize()
 
         # start the audio‐buffer consumer
         audio_consumer = asyncio.create_task(self.manage_audio_buffer())
+
+        report_task = asyncio.create_task(self.report_servicer(
+            report_interval= 60*5  # every 5 minutes
+        ))
 
         # launch discovery in background
         # discover_task = asyncio.create_task(self.start_edge_ble())

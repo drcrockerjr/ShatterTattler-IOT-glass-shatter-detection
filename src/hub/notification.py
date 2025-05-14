@@ -42,3 +42,24 @@ def notify_user(alert_code:AlertCode, time_stamp:str, device_id:str, extra_info:
     # s.quit()
 
 # notify_user(AlertCode.GLASS_BREAK, "4pm", "0440")
+
+def periodic_report(alarm_state, curr_time_stamp:str, prev_time_stamp,device_id:str, device_vbat, report_interval):
+    msg = EmailMessage()
+    report = (
+            f"Periodic report for {device_id} @ {curr_time_stamp}\n\n"
+            f"Number of Detected Glass Break detections since {prev_time_stamp} is {alarm_state["red"]}\n\n "
+            f"Number of Potential Glass Break detections since {prev_time_stamp} is {alarm_state["yellow"]} \n\n"
+            f"Edge Detection Device Battery Level (Voltage): {device_vbat}\n\n"
+        )
+    msg.set_content(report)
+
+    # me == the sender's email address
+    # you == the recipient's email address
+    msg['Subject'] = f'[SHATTER TATTLER] - Periodic Report - {curr_time_stamp}'
+    msg['From'] = notification_keys.sender_email
+    msg['To'] = notification_keys.recv_email
+
+    with smtplib.SMTP_SSL("smtp.gmail.com", 465) as server:
+        server.login(notification_keys.sender_email, notification_keys.sender_app_pass)
+        server.sendmail(notification_keys.sender_email, notification_keys.recv_email, msg.as_string())
+    

@@ -5,6 +5,8 @@ from datetime import datetime
 import uuid
 import struct
 import math
+import random
+
 
 from collections import deque
 
@@ -26,7 +28,7 @@ class BLEEdgeClient:
         self.shutdown_event = shutdown_event
         self.alarm = alarm
         self._pcm_buf = deque()
-
+        self.vbat = random_number = random.uniform(3.5, 3.7)
         self.samples_per_window = samples_per_window
         # State
         self.addr = device.address
@@ -133,6 +135,14 @@ class BLEEdgeClient:
         payload = bytes([0])
         self.logger.info(f"Started write with UUID: {self.write_uuids[0]}")
         await self._client.write_gatt_char(self.write_uuids[0], payload)
+    
+    async def is_alarm(self):
+        return 1 if self.alarm() is True else 0
+    
+    async def get_vbat(self):
+        curr_bat = self.vbat
+        self.vbat -= 0. #to emulate battery depletion
+        return curr_bat
 
 
 
