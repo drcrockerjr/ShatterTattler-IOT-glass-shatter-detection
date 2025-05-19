@@ -12,58 +12,28 @@ from torch.utils.tensorboard import SummaryWriter
 
 from typing import Any, Dict, Optional
 
-
-
-# def collate_fn(batch):
-
-#     # A data tuple has the form:
-#     # waveform, sample_rate, label, speaker_id, utterance_number
-
-#     tensors, targets = [], []
-
-#     # Gather in lists, and encode labels as indices
-#     for feature, label in batch:
-#         tensors += [feature]
-#         targets += [label_to_index(label)]
-
-#     # Group the list of tensors into a batched tensor
-#     tensors = pad_sequence(tensors)
-#     targets = torch.stack(targets)
-
-#     return tensors, targets
-# def collate_fn(batch):
-
-#     print("called collate function")
-#     features, labels = zip(*batch)  # Unzip the batch into features and labels
-
-#     # Pad sequences to the maximum length in the batch
-#     features = pad_sequence(features, batch_first=True, padding_value=0.0)
-#     labels = torch.tensor([label_to_index(label) for label in labels])
-
-#     return features, labels
-
-
 class ModelTrainer():
-    def __init__(self, 
-                 data_root: str = f"../../data/VOICe_clean/", 
-                 preprocess_data: bool = False):
+    def __init__(
+        self, 
+        data_root: str = f"../../data/VOICe_clean/", 
+        preprocess_data: bool = False
+    ):
+        # Confirm the dataset directory exists
+        assert os.path.exists(data_root), f"VOICe Dataset path doesn't exist: {data_root}"
+        csv_file = "audio_info.csv"
 
-        data_root = f"../../data/VOICe_clean/"
-        assert os.path.exists(data_root), f"VOICe Dataset path doesnt exist"
-
-        csv_file="audio_info.csv"
-
+        # Optionally run data augmentation/preprocessing before loading dataset
         if preprocess_data:
-            preprocess(num_synth=80, data_root=data_root) 
+            preprocess(num_synth=80, data_root=data_root)
 
-
+        # Initialize the detection dataset and split into train/validation
         dataset = SEDetectionDataset(csv_file, data_root)
-
         self.datasets = train_val_dataset(dataset=dataset)
 
-        print("Train set size: " + str(len(self.datasets['train'])))
-        print("Test set size: " + str(len(self.datasets['val'])))
+        print(f"Train set size: {len(self.datasets['train'])}")
+        print(f"Test set size: {len(self.datasets['val'])}")
 
+        # Device configuration: default to CPU, switch to GPU if available
         self.device = 'cpu'
         num_workers = 0
         pin_memory = False
@@ -71,174 +41,168 @@ class ModelTrainer():
 
         if torch.cuda.is_available():
             self.device = 'cuda'
-            num_workers = 0
             pin_memory = True
 
+        # Create data loaders for training and evaluation
         self.train_loader = torch.utils.data.DataLoader(
-            self.datasets['train'], 
+            self.datasets['train'],
+            batch_size=self.batch_size,
+            shuffle=True,
+            drop_last=True,
             num_workers=num_workers,
-            batch_size=self.batch_size, 
-            # collate_fn=collate_fn,
-            shuffle=True, 
-            drop_last=True,
-            pin_memory=pin_memory)
-        
+            pin_memory=pin_memory
+        )
         self.eval_loader = torch.utils.data.DataLoader(
-            self.datasets['val'], 
-            batch_size=self.batch_size, 
-            # collate_fn=collate_fn,
-            shuffle=True, 
+            self.datasets['val'],
+            batch_size=self.batch_size,
+            shuffle=True,
             drop_last=True,
-            pin_memory=pin_memory)
-    
-        self.epoch = 0
+            num_workers=num_workers,
+            pin_memory=pin_memory
+        )
 
+        self.epoch = 0  # Track current epoch
+
+        # Initialize the LSTM model for audio event detection
         self.model = AudioLSTM(n_feature=168, out_feature=3)
         self.model.to(self.device)
         print(self.model)
 
+        # Prepare directory to save model checkpoints
         mdl_dir = "saved_model"
         os.makedirs(mdl_dir, exist_ok=True)
-
         self.state_path = os.path.join(mdl_dir, "model.pt")
 
+        # Optimizer and loss function setup
         lr = 0.01
         weight_decay = 0.0001
+        self.optimizer = torch.optim.Adam(
+            self.model.parameters(),
+            lr=lr,
+            weight_decay=weight_decay
+        )
+        self.criterion = nn.CrossEntropyLoss()
 
-        self.optimizer = torch.optim.Adam(self.model.parameters(), lr=lr, weight_decay=weight_decay)
-
-        self.criterion = torch.nn.CrossEntropyLoss()
-
-
+        # TensorBoard writer for logging metrics
         log_dir = 'logs/' + datetime.now().strftime('%B%d_%H_%M_%S')
         self.writer = SummaryWriter(log_dir)
 
-    def log_scalars(self, global_tag, metric_dict, global_step):
-
+    def log_scalars(self, global_tag: str, metric_dict: Dict[str, Any], global_step: int):
+        """
+        Write a dict of scalar metrics to TensorBoard under a given tag.
+        """
         for tag, value in metric_dict.items():
             self.writer.add_scalar(f"{global_tag}/{tag}", value, global_step)
 
-    def train(self, 
-              loader,
-              log_interval=1
-            ):
-
-        metric_dict = {}
-
-        self.model.train()
+    def train(self, loader: torch.utils.data.DataLoader, log_interval: int = 1):
+        """
+        Run one training epoch over the provided DataLoader.
+        """
+        self.model.train()  # Set model to training mode
         correct = 0
         y_pred, y_target = [], []
+
+        # Progress bar for batches
         with tqdm(loader, unit="batch", leave=True) as tepoch:
             for batch_idx, (data, target) in enumerate(tepoch):
                 tepoch.set_description(f"Epoch {self.epoch}")
                 data = data.to(self.device)
                 target = target.to(self.device)
 
-                # print(f"Data: {data}, Shape: {data.shape}, target: {target}, shape: {target}")
-
-                # data = torch.tensor(data)
-                # target = torch.tensor(target)
-
+                # Zero gradients before backward pass
                 self.optimizer.zero_grad()
-                output, hidden_state = self.model(data, self.model.init_hidden(self.batch_size))
-                
+                output, hidden_state = self.model(
+                    data,
+                    self.model.init_hidden(self.batch_size)
+                )
                 loss = self.criterion(output, target)
                 loss.backward()
+
+                # Gradient clipping to avoid exploding gradients
                 nn.utils.clip_grad_norm_(self.model.parameters(), 5)
                 self.optimizer.step()
 
+                # Compute batch accuracy
                 pred = torch.max(output, dim=1).indices
                 correct += pred.eq(target).cpu().sum().item()
-                y_pred = y_pred + pred.tolist()
-                y_target = y_target + target.tolist()
+                y_pred.extend(pred.tolist())
+                y_target.extend(target.tolist())
 
-                tepoch.set_postfix(loss=loss.item(), accuracy=(100. * correct / (self.batch_size*(batch_idx+1))), refresh=True)
+                # Update progress bar with current loss and accuracy
+                batch_acc = 100. * correct / ((batch_idx + 1) * self.batch_size)
+                tepoch.set_postfix(loss=loss.item(), accuracy=batch_acc, refresh=True)
 
-                # with open("predictions.txt", "a") as f:
-                #     for i in y_target:
-                #         f.write(f"Target: {y_target[i]}, Prediction: {y_pred[i]}")
-
-                # if batch_idx % log_interval == 0: #print training stats
-
-                #     print('Train Epoch: {} [{}/{} ({:.0f}%)]\tLoss: {:.6f}'.format(
-                #         self.epoch, batch_idx * len(data), len(loader.dataset),
-                #         100. * batch_idx / len(loader), loss))
-
-        metric_dict["Loss"] = loss
-        metric_dict["Accuracy"] =  100. * correct / len(loader.dataset)         
-        
+        # Log final epoch metrics
+        metric_dict = {
+            "Loss": loss.item(),
+            "Accuracy": 100. * correct / len(loader.dataset)
+        }
         self.log_scalars("Train", metric_dict, self.epoch)
-                
-            
-                
-    def test(self,
-             loader, 
-             log_interval=1):
 
-        metric_dict = {}
-
-        self.model.eval()
+    def test(self, loader: torch.utils.data.DataLoader, log_interval: int = 1):
+        """
+        Evaluate the model on the validation set.
+        """
+        self.model.eval()  # Set model to evaluation mode
         correct = 0
         y_pred, y_target = [], []
+
         with tqdm(loader, unit="batch", leave=True) as tepoch:
             for batch_idx, (data, target) in enumerate(tepoch):
                 tepoch.set_description(f"Epoch {self.epoch}")
                 data = data.to(self.device)
                 target = target.to(self.device)
-                
-                output, hidden_state = self.model(data, self.model.init_hidden(self.batch_size))
 
+                output, hidden_state = self.model(
+                    data,
+                    self.model.init_hidden(self.batch_size)
+                )
                 loss = self.criterion(output, target)
-                
+
                 pred = torch.max(output, dim=1).indices
                 correct += pred.eq(target).cpu().sum().item()
-                y_pred = y_pred + pred.tolist()
-                y_target = y_target + target.tolist()
+                y_pred.extend(pred.tolist())
+                y_target.extend(target.tolist())
 
-                # if batch_idx % log_interval == 0: #print training stats
+                batch_acc = 100. * correct / ((batch_idx + 1) * self.batch_size)
+                tepoch.set_postfix(loss=loss.item(), accuracy=batch_acc, refresh=True)
 
-                #     print('\nTest set: Accuracy: {}/{} ({:.0f}%)\n'.format(
-                #         correct, len(loader.dataset),
-                #         100. * correct / len(loader.dataset)))
-                tepoch.set_postfix(loss=loss.item(), accuracy=(100. * correct / (self.batch_size*(batch_idx+1))), refresh=True)
-
-        
-        metric_dict["Loss"] = loss
-        metric_dict["Accuracy"] =  100. * correct / len(loader.dataset)
-
+        # Log validation metrics
+        metric_dict = {
+            "Loss": loss.item(),
+            "Accuracy": 100. * correct / len(loader.dataset)
+        }
         self.log_scalars("Eval", metric_dict, self.epoch)
-        
-        
-    def train_model(self, num_epoch:int=41, save_interval:int=5):
 
-
-        log_interval = 1
+    def train_model(self, num_epoch: int = 41, save_interval: int = 5):
+        """
+        Train and evaluate the model for a set number of epochs,
+        saving the state at regular intervals.
+        """
         for self.epoch in range(1, num_epoch):
-            # scheduler.step()
+            self.train(self.train_loader)
+            self.test(self.eval_loader)
 
-            self.train(self.train_loader, log_interval)
-            self.test(self.eval_loader, log_interval) 
-
+            # Save checkpoint every save_interval epochs
             if self.epoch % save_interval == 0:
                 self.save_state()
 
     def save_state(self):
-
+        """
+        Persist model and optimizer state to disk.
+        """
         torch.save({
             'epoch': self.epoch,
             'model_state_dict': self.model.state_dict(),
             'optimizer_state_dict': self.optimizer.state_dict()
-            }
-            , self.state_path)
+        }, self.state_path)
 
     def load_state(self, path: Optional[str] = None):
-        
-        if path is None:
-            dict = torch.load(self.state_path)
-        else:
-            dict = torch.load(path)
-            
-
-        self.epoch = dict["epoch"]
-        self.model.load_state_dict(dict["model_state_dict"])
-        self.optimizer.load_state_dict(dict["optimizer_state_dict"])
+        """
+        Load model and optimizer state from disk.
+        """
+        ckpt_path = path or self.state_path
+        checkpoint = torch.load(ckpt_path)
+        self.epoch = checkpoint['epoch']
+        self.model.load_state_dict(checkpoint['model_state_dict'])
+        self.optimizer.load_state_dict(checkpoint['optimizer_state_dict'])

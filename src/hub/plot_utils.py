@@ -76,25 +76,3 @@ def plot_spectrogram(specgram, title=None, ylabel="freq_bin", ax=None):
         ax.set_title(title)
     ax.set_ylabel(ylabel)
     ax.imshow(librosa.power_to_db(specgram), origin="lower", aspect="auto", interpolation="nearest")
-
-
-
-# if i == 22:
-#         # plot_spectrogram(event, Fs)
-#         # event_specgram = torchaudio.transforms.Spectrogram()(event_wform)
-#         # plot_spectrogram(event_specgram, Fs)
-#         # print("Shape of spectrogram: {}".format(event_specgram.size()))
-        
-#         # plt.imshow(event_specgram.log2()[0,:,:].numpy(), cmap='gray')
-
-#         # plt.show(block=True)
-#         spectogram = T.Spectrogram(n_fft=512)
-
-#         spec = spectogram(event_wform)
-
-#         fig, axs = plt.subplots(2, 1)
-#         plot_waveform(event_wform, Fs, title="Original waveform", ax=axs[0])
-#         plot_spectrogram(spec[0], title="spectrogram", ax=axs[1])
-#         fig.tight_layout()
-
-#         plt.show()
