@@ -4,7 +4,9 @@ ShatterTattler is an embedded audio signal analysis platform designed to run dee
 
 # Overview
 
-ShatterTattler integrates high-fidelity audio capture with efficient preprocessing and inference. It leverages the ESP32-S3 microcontroller for connectivity and control, coupled with a PCM1841-Q1 quad channel ADC for robust multi-microphone audio input. Audio Telemetry data is then transported vio BLE 5.0 from the edge ESP32 to an Nvidia Jetson Orin Nano where the bulk of the heavy processing occurs. Upon data arrival, preprocessing (filtering, spectral analysis, feature extraction) is performed on the Jetson upon data arrival device CPU before LSTM model inference occurs on the device GPU.
+ShatterTattler integrates high-fidelity audio capture with efficient preprocessing and inference. It leverages the ESP32-S3 microcontroller for connectivity and control, with a PCM1841-Q1 quad channel ADC for microphone audio input from multiple sources. Audio Telemetry data is then transported vio BLE 5.0 from the edge ESP32 to an Nvidia Jetson Orin Nano where the bulk of the heavy processing occurs. Upon data arrival, preprocessing (filtering, spectral analysis, feature extraction) is performed on the Jetson upon data arrival device CPU before LSTM model inference occurs on the device GPU. A general overview is described in this image: 
+<img width="1104" height="622" alt="image" src="https://github.com/user-attachments/assets/48dbb552-07d4-49c1-9b34-3cc0df519917" />
+
 
 # Hardware Components
 ## ESP32-S3
